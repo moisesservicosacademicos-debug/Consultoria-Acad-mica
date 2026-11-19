@@ -6,7 +6,7 @@ window.CA = window.CA || {};
     url: 'https://teemhlpfcnhfwveedmym.supabase.co',
     key: 'sb_publishable_DQ9AGXIkznhUj_bg-whWFg_YjYlmMtl',
     ws: 'nova_empresa_main',
-    version: '2.1.0',
+    version: '2.1.1',
     poll: 30000
   };
 
@@ -14,7 +14,7 @@ window.CA = window.CA || {};
   var MES = CA.MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   var MES3 = CA.MES3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   CA.FORMAS = ['Pix', 'Dinheiro', 'Transferência', 'Cartão', 'Outro'];
-  CA.GRUPOS = ['Operacional', 'Ferramentas e sistemas', 'Marketing', 'Impostos e taxas', 'Outros'];
+  CA.GRUPOS = ['Operacional', 'Ferramentas e sistemas', 'Marketing', 'Impostos e taxas', 'Pró-labore', 'Outros'];
   CA.DESP_FIXAS = ['ChatGPT', 'Claude', 'Gemini IA'];
 
   var esc = CA.esc = function (v) {

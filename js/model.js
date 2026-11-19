@@ -58,15 +58,16 @@
       .sort(function (a, b) { return b.data.localeCompare(a.data) || String(b.r._createdAt || '').localeCompare(String(a.r._createdAt || '')); });
     var byM = {};
     M.fin.forEach(function (f) {
-      var m = byM[f.ym] || (byM[f.ym] = { ym: f.ym, rec: 0, desp: 0, mens: 0, event: 0, extra: 0, outro: 0, n: 0 });
+      var m = byM[f.ym] || (byM[f.ym] = { ym: f.ym, rec: 0, desp: 0, pl: 0, mens: 0, event: 0, extra: 0, outro: 0, n: 0 });
       m.rec += f.rec; m.desp += f.desp; m.n++;
+      if (f.tipo === 'desp' && f.grupo === 'Pró-labore') m.pl += f.desp;
       if (f.tipo in m) m[f.tipo] += f.rec;
     });
-    M.months = Object.keys(byM).sort().map(function (k) { var m = byM[k]; m.rec = r2(m.rec); m.desp = r2(m.desp); m.res = r2(m.rec - m.desp); return m; });
-    M.monthOf = function (ym) { return byM[ym] || { ym: ym, rec: 0, desp: 0, res: 0, mens: 0, event: 0, extra: 0, outro: 0, n: 0 }; };
-    var acc = { rec: 0, desp: 0 };
-    M.fin.forEach(function (f) { if (f.data <= hoje) { acc.rec += f.rec; acc.desp += f.desp; } });
-    M.acc = { rec: r2(acc.rec), desp: r2(acc.desp), res: r2(acc.rec - acc.desp), desde: M.months.length ? M.months[0].ym : hoje.slice(0, 7) };
+    M.months = Object.keys(byM).sort().map(function (k) { var m = byM[k]; m.rec = r2(m.rec); m.desp = r2(m.desp); m.pl = r2(m.pl); m.res = r2(m.rec - m.desp); return m; });
+    M.monthOf = function (ym) { return byM[ym] || { ym: ym, rec: 0, desp: 0, pl: 0, res: 0, mens: 0, event: 0, extra: 0, outro: 0, n: 0 }; };
+    var acc = { rec: 0, desp: 0, pl: 0 };
+    M.fin.forEach(function (f) { if (f.data <= hoje) { acc.rec += f.rec; acc.desp += f.desp; if (f.tipo === 'desp' && f.grupo === 'Pró-labore') acc.pl += f.desp; } });
+    M.acc = { rec: r2(acc.rec), desp: r2(acc.desp), pl: r2(acc.pl), res: r2(acc.rec - acc.desp), desde: M.months.length ? M.months[0].ym : hoje.slice(0, 7) };
 
     /* Prazos e agenda */
     M.deadlines = arr(d, 'deadlines').map(function (x) {

@@ -356,7 +356,7 @@
     out += '<div class="grid">';
     out += '<section class="ledger"><div><div class="lb">Receita de ' + esc(CA.MES[+ym.slice(5, 7) - 1].toLowerCase()) + '</div><div class="vl num pv">' + brl(m.rec) + '</div><div class="ft">' + (delta(m.rec, p.rec) || 'sem mês anterior para comparar') + '</div></div>'
       + '<div><div class="lb">Despesas</div><div class="vl sm num pv">' + brl(m.desp) + '</div><div class="ft">' + desp.length + ' lançamentos</div></div>'
-      + '<div><div class="lb">Lucro líquido do mês</div><div class="vl sm num pv ' + (m.res >= 0 ? 'pos' : 'neg') + '">' + brl(m.res) + '</div><div class="ft">margem de ' + (m.rec ? Math.round(m.res / m.rec * 100) : 0) + '%</div></div>'
+      + '<div><div class="lb">Lucro líquido do mês</div><div class="vl sm num pv ' + (m.res >= 0 ? 'pos' : 'neg') + '">' + brl(m.res) + '</div><div class="ft">margem de ' + (m.rec ? Math.round(m.res / m.rec * 100) : 0) + '%' + (m.pl > 0 && m.rec ? ' · antes do pró-labore ' + Math.round((m.res + m.pl) / m.rec * 100) + '%' : '') + '</div></div>'
       + '<div><div class="lb">Lucro acumulado até este mês</div><div class="vl sm num pv gold">' + brl0(accYm.rec - accYm.desp) + '</div><div class="ft">receita acumulada de ' + brl0(accYm.rec) + '</div></div></section>';
     out += '<section class="panel c6"><div class="panel-h"><h2>Composição da receita</h2></div><div class="panel-b">' + mix(m) + '</div></section>';
     var gk = Object.keys(byG).sort(function (a, b) { return byG[b] - byG[a]; });
@@ -383,10 +383,12 @@
     out += '<section class="ledger"><div><div class="lb">Receita acumulada</div><div class="vl num pv">' + brl0(recAcc) + '</div><div class="ft">' + n + ' meses</div></div>'
       + '<div><div class="lb">Despesas acumuladas</div><div class="vl sm num pv">' + brl0(despAcc) + '</div><div class="ft">' + (firstDesp ? 'lançadas desde ' + esc(CA.ymShort(firstDesp.ym).toLowerCase()) : 'nenhuma lançada') + '</div></div>'
       + '<div><div class="lb">Lucro líquido acumulado</div><div class="vl sm num pv pos">' + brl0(resAcc) + '</div><div class="ft">tudo o que a consultoria já gerou</div></div>'
-      + '<div><div class="lb">Margem líquida</div><div class="vl sm num gold">' + (recAcc ? Math.round(resAcc / recAcc * 100) : 0) + '%</div><div class="ft">no período todo</div></div></section>';
+      + '<div><div class="lb">Margem líquida</div><div class="vl sm num gold">' + (recAcc ? Math.round(resAcc / recAcc * 100) : 0) + '%</div><div class="ft">' + (M.acc.pl > 0 && recAcc ? 'antes do pró-labore: ' + Math.round((resAcc + M.acc.pl) / recAcc * 100) + '%' : 'no período todo') + '</div></div></section>';
     out += '<div class="panel c4"><div class="kpi"><span class="lb">Receita nos últimos 12 meses</span><span class="vl num pv">' + brl0(s12) + '</span><span class="ft">' + (p12 ? varPct(s12, p12) + ' sobre os 12 meses anteriores' : 'meses fechados') + '</span></div></div>';
     out += '<div class="panel c4"><div class="kpi"><span class="lb">Média mensal</span><span class="vl num pv">' + brl0(last12.length ? s12 / last12.length : 0) + '</span><span class="ft">nos últimos ' + last12.length + ' meses fechados</span></div></div>';
     out += '<div class="panel c4"><div class="kpi"><span class="lb">Melhor mês</span><span class="vl num pv">' + brl0(best.rec) + '</span><span class="ft">' + esc(CA.ymLabel(best.ym)) + '</span></div></div>';
+    if (recAcc > 0 && despAcc / recAcc < 0.10) out += '<div class="note c12"><b>Margem provavelmente acima da real.</b> As despesas somam só ' + (Math.round(despAcc / recAcc * 1000) / 10).toString().replace('.', ',') + '% da receita. Para prestador de serviço, o comum é algo entre 10% e 40%. Confira se impostos, taxas de pagamento, ferramentas, internet e o seu pró-labore estão lançados. ' + lbtn('Lançar despesa', 'newDesp') + '</div>';
+    else if (M.acc.pl <= 0) out += '<div class="note info c12">Nenhum pró-labore lançado: o lucro mostrado inclui a sua própria remuneração. Use o grupo "Pró-labore" em Lançar despesa para ver a margem depois da sua retirada.</div>';
     if (firstDesp && firstDesp.ym > start) out += '<div class="note info c12">As despesas passaram a ser lançadas em ' + esc(CA.ymLabel(firstDesp.ym).toLowerCase()) + '. Antes disso, o lucro de cada mês aparece igual à receita.</div>';
 
     // 1. mês a mês
