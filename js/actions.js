@@ -55,6 +55,7 @@
       case 'showPw': var a = findBy(M.access, 'uid', g('data-uid')), sp = document.querySelector('[data-pw="' + CSS.escape(g('data-uid')) + '"]'); if (a && sp) sp.textContent = sp.textContent === a.senha ? '••••••••' : a.senha; break;
       case 'copy': copy(g('data-v')); break;
       case 'evoToggle': var hk = g('data-k'), hd = CA.S.ui.evoHide || (CA.S.ui.evoHide = {}); hd[hk] = !hd[hk]; CA.render(); break;
+      case 'heroMode': CA.S.ui.heroMode = g('data-k'); CA.render(); break;
       case 'yoyMetric': CA.S.ui.yoyMetric = g('data-k'); CA.render(); break;
     }
   };
