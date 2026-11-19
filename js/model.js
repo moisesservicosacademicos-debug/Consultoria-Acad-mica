@@ -88,7 +88,7 @@
       linked[s.uid] = 1;
     });
     M.deadlines.forEach(function (x) {
-      if (!x.open || (x.link && (linked[x.link] || M.svByUid[x.link]))) return;
+      if (!x.open || x.link) return; // prazo ligado a serviço: o serviço já aparece (ou foi apagado)
       M.prazos.push({ kind: 'dl', x: x, nome: x.nome, titulo: x.servico || x.desc || 'Prazo', prazo: x.prazo, dias: x.dias, saldo: 0 });
     });
     M.prazos.sort(function (a, b) { return (a.prazo || '9999').localeCompare(b.prazo || '9999'); });
