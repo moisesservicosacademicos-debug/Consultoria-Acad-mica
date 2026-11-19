@@ -114,7 +114,7 @@
   }
   function pctTxt(v) { return (Math.round(v * 10) / 10).toString().replace('.', ',') + '%'; }
   function periodData(M) {
-    var nM = CA.S.ui.heroN || 6, end = M.hoje.slice(0, 7), sr = CA.monthSeries(M, CA.ymAdd(end, -(nM - 1)), end), pv = CA.monthSeries(M, CA.ymAdd(end, -(2 * nM - 1)), CA.ymAdd(end, -nM));
+    var nM = CA.S.ui.heroN || 12, end = M.hoje.slice(0, 7), sr = CA.monthSeries(M, CA.ymAdd(end, -(nM - 1)), end), pv = CA.monthSeries(M, CA.ymAdd(end, -(2 * nM - 1)), CA.ymAdd(end, -nM));
     var byG = {}; M.fin.forEach(function (f) { if (f.tipo !== 'desp') return; var g = HERO_G.some(function (x) { return x[0] === f.grupo; }) ? f.grupo : 'Sem grupo'; var o = byG[f.ym] || (byG[f.ym] = {}); o[g] = (o[g] || 0) + f.desp; });
     sr.forEach(function (m) { m.g = byG[m.ym] || {}; });
     var used = HERO_G.filter(function (g) { return sr.some(function (m) { return m.g[g[0]] > 0; }); });
@@ -167,7 +167,7 @@
     if (best && best.rec) tk.push('Melhor mês: <b>' + esc(CA.ymLabel(best.ym).toLowerCase()) + '</b>, com <b class="pv">' + brl(best.rec) + '</b>.');
     tk.push(CA.MES[+cur.ym.slice(5, 7) - 1] + ' até agora: <b class="pv">' + brl(cur.rec) + '</b> recebidos' + (media ? ', <b>' + pctTxt(cur.rec / media * 100) + '</b> da média mensal.' : '.'));
     P.tk = tk; P.tkNote = opx != null && opx < 10;
-    P.rec = rec; P.res = res; P.desp = desp; P.marg$ = marg;
+    P.rec = rec; P.res = res; P.desp = desp; P.margP = marg; P.opxP = opx; P.recorP = recor; P.cresc = cresc;
     return P;
   }
   function mix(m) {
@@ -205,38 +205,91 @@
   /* ---------- Painel ---------- */
   var VIEWS = {};
   VIEWS['painel/visao'] = function (M) {
-    CA.S.ui.chartH = window.innerWidth > 1100 ? Math.max(150, Math.min(600, window.innerHeight - 470)) : 262;
-    var nowYm = M.hoje.slice(0, 7), P = periodData(M), mesNome = CA.MES[+nowYm.slice(5, 7) - 1].toLowerCase();
-    var atrasoVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0);
-    var cell = function (lb, vl, ft, cls, go, dot) { var tag = go ? 'button type="button" data-go="' + go + '"' : 'div'; return '<' + tag + ' class="kc' + (cls ? ' ' + cls : '') + '"><span class="lb">' + (dot ? '<i style="background:' + dot + '"></i>' : '') + lb + '</span><b class="num pv">' + vl + '</b><small>' + ft + '</small></' + (go ? 'button' : 'div') + '>'; };
-    var out = '<div class="pn">';
-    out += '<section class="kstrip1" aria-label="Indicadores">'
-      + cell('Recebido em ' + esc(mesNome), brl(M.now.rec), delta(M.now.rec, M.prev.rec) || 'primeiro mês com dados', 'hl', 'financeiro/resumo', 'var(--in)')
-      + cell('Lucro do mês', brl(M.now.res), brl(M.now.desp) + ' de despesas', M.now.res >= 0 ? '' : 'out', 'financeiro/resumo', 'var(--st-lucro)')
-      + cell('Mensalidades previstas', brl(M.mrr), M.ativos.length + ' mensalistas ativos', '', 'mensalidades/situacao', 'var(--action)')
-      + cell('A receber de serviços', brl(M.aReceber), M.services.filter(function (s) { return s.saldo > 0; }).length + ' serviços com saldo', '', 'servicos/receber', 'var(--warn)')
-      + cell('Em atraso', M.atrasados.length ? M.atrasados.length + ' · ' + brl(atrasoVal) : 'Nenhum', M.atrasados.length ? 'mensalidades vencidas' : 'tudo em dia', M.atrasados.length ? 'out' : '', 'mensalidades/situacao', 'var(--out)')
-      + cell('Lucro acumulado', brl(M.acc.res), 'desde ' + esc(CA.ymShort(M.acc.desde).toLowerCase()) + ' · margem ' + (M.acc.rec ? Math.round(M.acc.res / M.acc.rec * 100) : 0) + '%', 'gold', 'financeiro/evolucao', 'var(--gold)')
-      + '</section>';
-    var seg = '<div class="seg hero-seg" role="group" aria-label="Período">' + [[6, '6 meses'], [12, '12 meses']].map(function (o) { return '<button type="button" data-act="heroN" data-k="' + o[0] + '" aria-pressed="' + (P.nM === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
-    out += '<section class="panel pn-chart"><div class="panel-h"><h2>Receita, despesas e lucro</h2>' + seg + '</div><div class="panel-b">' + P.chart + '</div></section>';
-    out += '<section class="panel pn-side"><div class="panel-h"><h2>Indicadores · ' + P.nM + ' meses</h2></div><div class="pn-g">' + P.gauges + '</div>'
-      + '<div class="pn-tk"><p>' + P.tk[1] + '</p></div>'
-      + '<div class="pn-more"><button type="button" class="btn sm" data-act="pnDre">' + ic('file') + 'Demonstrativo</button><button type="button" class="btn sm" data-act="pnTk">' + ic('chart') + 'Leituras do período</button></div></section>';
-    var list = function (title, items, rowFn, go, emptyTxt) {
-      return '<section class="panel pn-l"><div class="panel-h"><h2>' + title + (items.length ? ' <span class="cnt">' + items.length + '</span>' : '') + '</h2>' + lbtn('Ver tudo', 'go', ' data-go="' + go + '"') + '</div><div class="panel-b"><div class="rows">'
-        + (items.length ? items.slice(0, 3).map(rowFn).join('') : '<div class="pn-empty">' + emptyTxt + '</div>') + '</div></div></section>';
+    var hoje = M.hoje, nowYm = hoje.slice(0, 7), nM = CA.S.ui.heroN || 12, P = periodData(M);
+    var mesNome = CA.MES[+nowYm.slice(5, 7) - 1];
+    var dia = +hoje.slice(8, 10), diasMes = new Date(+hoje.slice(0, 4), +hoje.slice(5, 7), 0).getDate();
+    // média dos meses fechados (12 anteriores ao atual)
+    var fech = CA.monthSeries(M, CA.ymAdd(nowYm, -12), CA.ymAdd(nowYm, -1)).filter(function (m, i, a) { return a.slice(0, i + 1).some(function (x) { return x.rec > 0; }); });
+    var media = fech.length ? fech.reduce(function (t, m) { return t + m.rec; }, 0) / fech.length : 0;
+    var rec = M.now.rec, proj = dia ? rec / dia * diasMes : rec, pctMed = media ? rec / media * 100 : 0, ritmo = dia / diasMes * 100;
+    var out = '<div class="pa"><div class="pa-r1">';
+    // cartão do mês
+    out += '<section class="pa-hero"><div class="l"><span>' + esc(mesNome) + ' de ' + hoje.slice(0, 4) + '</span><span>dia ' + dia + ' de ' + diasMes + '</span></div>'
+      + '<div class="big"><b class="num pv">' + brl(rec) + '</b><small>recebidos até hoje</small></div>'
+      + '<div class="pbar" title="Receita do mês em relação à média mensal"><i style="width:' + Math.min(100, pctMed).toFixed(1) + '%"></i><span class="mk" style="left:' + Math.min(100, ritmo).toFixed(1) + '%" title="Ritmo do mês"></span></div>'
+      + '<div class="ft"><span><b>' + Math.round(pctMed) + '%</b> da média mensal (<span class="pv">' + brl(media) + '</span>)</span><span>ritmo do mês: ' + Math.round(ritmo) + '%</span></div>'
+      + '<div class="r2"><div>Lucro do mês<b class="num pv">' + brl(M.now.res) + '</b></div><div>Despesas<b class="num pv">' + brl(M.now.desp) + '</b></div><div>Projeção<b class="num pv">' + brl(proj) + '</b></div></div></section>';
+    // cartões
+    var recM = M.now.mens, falta = Math.max(0, M.mrr - recM), pm = M.mrr ? Math.min(100, recM / M.mrr * 100) : 0;
+    var atrasoVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0), emDia = M.ativos.length - M.atrasados.length;
+    var nSaldo = M.services.filter(function (s) { return s.saldo > 0; }).length;
+    var tile = function (dot, lb, vl, ft, bottom, go, cls) { return '<button type="button" class="pa-tile' + (cls ? ' ' + cls : '') + '" data-go="' + go + '"><span class="lb"><i style="background:' + dot + '"></i>' + lb + '</span><b class="vl num pv">' + vl + '</b><span class="ft">' + ft + '</span><span class="bt">' + bottom + '</span></button>'; };
+    out += tile('var(--action)', 'Mensalidades do mês', brl(recM), 'de <span class="pv">' + brl(M.mrr) + '</span> previstos' + (falta ? ' · faltam <span class="pv">' + brl(falta) + '</span>' : ''), '<span class="pbar2"><i style="width:' + pm.toFixed(1) + '%"></i></span>', 'mensalidades/competencia');
+    out += tile('var(--warn)', 'A receber de serviços', brl(M.aReceber), nSaldo ? nSaldo + (nSaldo === 1 ? ' serviço com saldo' : ' serviços com saldo') : 'nenhum saldo em aberto', '<span class="lnk">Ver serviços</span>', 'servicos/receber');
+    out += tile(M.atrasados.length ? 'var(--out)' : 'var(--in)', 'Mensalidades em atraso', M.atrasados.length ? M.atrasados.length + ' · ' + brl(atrasoVal) : 'Nenhuma', M.atrasados.length ? emDia + ' mensalistas em dia' : M.ativos.length + ' mensalistas em dia', M.atrasados.length ? '<span class="chip out">cobrar agora</span>' : '<span class="chip in">tudo em dia</span>', 'mensalidades/situacao', M.atrasados.length ? 'bad' : 'ok');
+    out += tile('var(--gold)', 'Lucro acumulado', brl(M.acc.res), 'desde ' + esc(CA.ymShort(M.acc.desde).toLowerCase()) + ' · margem de ' + (M.acc.rec ? Math.round(M.acc.res / M.acc.rec * 100) : 0) + '%', '<span class="lnk">Ver evolução</span>', 'financeiro/evolucao', 'gold');
+    out += '</div><div class="pa-r2">';
+    // gráfico
+    var sr = CA.monthSeries(M, CA.ymAdd(nowYm, -(nM - 1)), nowYm);
+    var seg = '<div class="seg hero-seg" role="group" aria-label="Período">' + [[6, '6 meses'], [12, '12 meses']].map(function (o) { return '<button type="button" data-act="heroN" data-k="' + o[0] + '" aria-pressed="' + (nM === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    var tip = function (i) {
+      var m = sr[i], part = m.ym === nowYm, prev = sr[i - 1];
+      var rows = [['Receita', '<b>' + brl(m.rec) + '</b>', 'var(--bar-c)'], ['Despesas', brl(m.desp), 'var(--out)'], ['Lucro líquido', brl(m.res), 'var(--in)']];
+      if (part) rows.push(['Projeção do mês', brl(proj), 'var(--bar-c)']);
+      return CA.tipMonth(CA.ymLabel(m.ym) + (part ? ' · em andamento' : ''), rows, 'Margem ' + (m.rec ? Math.round(m.res / m.rec * 100) + '%' : '—') + (media ? ' · ' + Math.round(m.rec / media * 100) + '% da média' : '') + (prev && prev.rec ? ' · ' + varPct(m.rec, prev.rec) + ' sobre ' + CA.MES3[+prev.ym.slice(5, 7) - 1] : ''));
     };
-    out += list('Próximas entregas', M.prazos, prazoRow, 'agenda/prazos', 'Nenhum serviço em andamento');
-    out += list('Mensalidades a cobrar', M.rcl.filter(function (x) { return x.faixa === 'atraso' || x.faixa === 'breve'; }), mensRow, 'mensalidades/situacao', 'Nada a cobrar nos próximos 7 dias');
-    out += list('Agenda', M.schedules.filter(function (s) { return s.open; }), schRow, 'agenda/agendamentos', 'Sem agendamentos pendentes');
-    out += list('Últimos lançamentos', M.fin, finRow, 'financeiro/extrato', 'Nenhum lançamento ainda');
-    return out + '</div>';
+    var g = P; // indicadores do período
+    var pill = function (lb, vl, sm, cls) { return '<div><span>' + lb + '</span><b class="' + (cls || '') + '">' + vl + '</b><small>' + sm + '</small></div>'; };
+    var pc = function (v) { return v == null ? '—' : Math.round(v) + '%'; };
+    var cresc = g.cresc;
+    out += '<section class="panel pa-ch"><div class="panel-h"><h2>Receita por mês <span class="muted">· despesas em vermelho no topo da coluna</span></h2>' + seg + '</div>'
+      + '<div class="plot">' + CA.chart('painelBars', { kind: 'bars', fill: true, months: sr, avg: media, proj: proj, partialLast: true, tip: tip, aria: 'Receita e despesas por mês',
+        tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1]; } }) + '</div>'
+      + '<div class="pa-pills">' + pill('Margem líquida', pc(g.margP), nM + ' meses') + pill('Despesas sobre a receita', pc(g.opxP), '<span class="pv">' + brl(g.desp) + '</span>') + pill('Receita recorrente', pc(g.recorP), 'mensalidades')
+      + pill('Crescimento', cresc == null ? '—' : (cresc >= 0 ? '+' : '−') + Math.abs(Math.round(cresc)) + '%', 'sobre ' + nM + ' anteriores', cresc == null ? '' : cresc >= 0 ? 'up' : 'dn')
+      + '<div class="act"><button type="button" class="lnk" data-act="pnDre">Demonstrativo completo</button></div></div></section>';
+    // compromissos
+    out += timeline(M);
+    return out + '</div></div>';
   };
+  function timeline(M) {
+    var ev = [];
+    M.prazos.forEach(function (p) { if (!CA.isISO(p.prazo)) return; ev.push({ t: 'ent', d: p.prazo, dias: p.dias, nome: p.nome, tit: p.titulo, sub: p.kind === 'sv' ? p.sid : 'entrega', act: p.kind === 'sv' ? 'sv' : 'dl', uid: p.kind === 'sv' ? p.s.uid : p.x.uid }); });
+    M.schedules.forEach(function (s) { if (!s.open || !CA.isISO(s.data)) return; ev.push({ t: 'ag', d: s.data, dias: s.dias, nome: s.nome, tit: s.desc || s.tipo || 'Compromisso', sub: (s.tipo || 'agenda').toLowerCase() + (s.hora ? ' · ' + s.hora : ''), act: 'sch', uid: s.uid }); });
+    M.rcl.forEach(function (x) { if (x.faixa !== 'atraso' && x.faixa !== 'breve') return; ev.push({ t: 'cob', d: x.prox, dias: x.dias, nome: x.nome, tit: 'Mensalidade de ' + x.nome, sub: (x.faixa === 'atraso' ? 'venceu ' : 'vence ') + CA.dshort(x.prox).replace(' ', '/') + ' · cobrança', valor: x.valor, act: 'cli', cid: x.cid }); });
+    // agrupa entregas e agenda da mesma pessoa no mesmo dia
+    var grp = {}, list = [];
+    ev.forEach(function (e) {
+      if (e.t === 'cob') { list.push(e); return; }
+      var k = (e.nome || '').toLowerCase() + '|' + e.d;
+      if (grp[k]) { var G = grp[k]; G.n++; if (G.tits.indexOf(e.tit) < 0) G.tits.push(e.tit); if (e.t === 'ag') G.t = G.t === 'ent' ? 'mix' : G.t; return; }
+      grp[k] = Object.assign({ n: 1, tits: [e.tit] }, e); list.push(grp[k]);
+    });
+    list.sort(function (a, b) { return a.d.localeCompare(b.d) || (a.t === 'cob' ? -1 : 1); });
+    var max = 14;
+    var cor = { ent: 'var(--info)', ag: 'var(--warn)', mix: 'var(--info)', cob: 'var(--action)' };
+    var html = '', sec = '', shown = 0;
+    list.forEach(function (e) {
+      if (shown >= max) return;
+      var s2 = e.dias < 0 ? 'Atrasado' : e.dias <= 7 ? 'Próximos 7 dias' : CA.MES[+e.d.slice(5, 7) - 1] + (e.d.slice(0, 4) !== M.hoje.slice(0, 4) ? ' de ' + e.d.slice(0, 4) : '');
+      if (s2 !== sec) { html += '<div class="tl-d">' + esc(s2) + '</div>'; sec = s2; }
+      var tit = e.tits ? e.tits.join(' + ') : e.tit;
+      var sub = e.t === 'cob' ? e.sub : esc(e.nome) + ' · ' + CA.dshort(e.d).replace(' ', '/') + ' · ' + (e.n > 1 ? e.n + ' itens' : esc(e.sub));
+      var right = e.t === 'cob' ? '<span class="r num pv">' + brl(e.valor) + '</span>'
+        : e.dias < 0 ? '<span class="chip out">' + (-e.dias) + (e.dias === -1 ? ' dia' : ' dias') + '</span>'
+        : '<span class="chip ' + (e.t === 'ag' ? 'warn' : 'act') + '">' + (e.dias === 0 ? 'hoje' : e.dias === 1 ? 'amanhã' : 'em ' + e.dias + ' dias') + '</span>';
+      html += '<button type="button" class="tl-i" data-act="' + e.act + '"' + (e.uid ? ' data-uid="' + esc(e.uid) + '"' : '') + (e.cid ? ' data-cid="' + esc(e.cid) + '"' : '') + '><i style="background:' + (e.dias < 0 ? 'var(--out)' : cor[e.t]) + '"></i><span class="m"><b>' + esc(tit) + '</b><span>' + sub + '</span></span>' + right + '</button>';
+      shown++;
+    });
+    if (!list.length) html = '<div class="pn-empty">Nenhum compromisso pela frente.</div>';
+    var lastF = M.fin[0];
+    return '<section class="panel pa-tl"><div class="panel-h"><h2>Próximos compromissos' + (list.length ? ' <span class="cnt">' + list.length + '</span>' : '') + '</h2>' + lbtn('Agenda', 'go', ' data-go="agenda/prazos"') + '</div><div class="tl">' + html + '</div>'
+      + '<div class="tl-f"><span class="tl-more" hidden></span><span class="tl-last">' + (lastF ? 'Último lançamento: ' + esc(lastF.tipo === 'desp' ? lastF.desc : (lastF.cliente || lastF.desc)) + ', <span class="pv">' + (lastF.tipo === 'desp' ? '− ' + brl(lastF.desp) : brl(lastF.rec)) + '</span> em ' + CA.dshort(lastF.data).replace(' ', '/') : 'Nenhum lançamento ainda') + '</span>' + lbtn('Extrato', 'go', ' data-go="financeiro/extrato"') + '</div></section>';
+  }
   CA.painelDrawer = function (kind) {
     var M = CA.M(), P = periodData(M), per = 'últimos ' + P.nM + ' meses';
     if (kind === 'dre') {
-      CA.drawer({ title: 'Demonstrativo de resultado', sub: per, body: '<section class="panel dre-p">' + P.dre + '</section><section class="panel" style="margin-top:12px"><div class="panel-h"><h2>Margem líquida por mês</h2></div><div class="panel-b">' + P.marg + '</div></section>',
+      CA.drawer({ title: 'Demonstrativo de resultado', sub: per, body: '<section class="panel dre-p">' + P.dre + '</section><section class="panel" style="margin-top:12px"><div class="panel-h"><h2>Margem líquida por mês</h2></div><div class="panel-b">' + P.marg + '</div></section><div class="takeaways" style="margin-top:12px"><h3>Leituras do período</h3><ul>' + P.tk.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul></div>',
         mount: function (d) { setTimeout(function () { CA.mountCharts(d); }, 30); } });
     } else {
       CA.drawer({ title: 'Leituras do período', sub: per, body: '<div class="takeaways"><ul>' + P.tk.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>' + (P.tkNote ? '<p class="tk-note">Despesas abaixo de 10% da receita costumam indicar custos não lançados (impostos, ferramentas, pró-labore).</p>' : '') + '</div>' });

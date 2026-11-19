@@ -51,9 +51,20 @@
       partialLast: bool, markers: [{ i, label }], height, zero: bool
     }
   */
-  CA.chart = function (id, cfg) { REG[id] = cfg; return '<div class="chart-box" data-chart="' + esc(id) + '" style="height:' + (cfg.height || 280) + 'px"></div>'; };
+  CA.chart = function (id, cfg) { REG[id] = cfg; return '<div class="chart-box' + (cfg.fill ? ' fill' : '') + '" data-chart="' + esc(id) + '"' + (cfg.fill ? '' : ' style="height:' + (cfg.height || 280) + 'px"') + '></div>'; };
+  /* Esconde itens da linha do tempo que não cabem no cartão (nada fica cortado pela metade) */
+  CA.fitTimeline = function (root) {
+    (root || document).querySelectorAll('.tl').forEach(function (tl) {
+      var kids = [].slice.call(tl.children); kids.forEach(function (k) { k.hidden = false; });
+      var lim = tl.getBoundingClientRect().bottom, hid = 0;
+      kids.forEach(function (k) { if (k.getBoundingClientRect().bottom > lim + 1) { k.hidden = true; if (k.classList.contains('tl-i')) hid++; } });
+      for (var i = kids.length - 1; i >= 0; i--) { if (kids[i].hidden) continue; if (kids[i].classList.contains('tl-d')) kids[i].hidden = true; break; }
+      var more = tl.parentNode.querySelector('.tl-more'); if (more) { more.textContent = hid ? '+' + hid + ' na agenda' : ''; more.hidden = !hid; }
+    });
+  };
   CA.mountCharts = function (root) {
-    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : draw)(box, cfg); });
+    CA.fitTimeline(root);
+    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : draw)(box, cfg); });
   };
   var rT;
   window.addEventListener('resize', function () { clearTimeout(rT); rT = setTimeout(function () { CA.mountCharts(); }, 150); });
@@ -195,6 +206,53 @@
       tip.style.left = left + 'px';
     }
     function hide() { tip.hidden = true; svg.classList.remove('hov'); last = -1; }
+    svg.addEventListener('pointermove', function (e) { show(e.clientX); });
+    svg.addEventListener('pointerdown', function (e) { show(e.clientX); });
+    svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hide(); });
+  }
+
+
+  /* ===== Colunas de receita com despesas no topo, média e projeção do mês =====
+     cfg = { kind:'bars', fill, months:[{ym,rec,desp}], avg, proj, partialLast, tick:fn(i), tip:fn(i) } */
+  function topRound(x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h));
+    return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+  }
+  function drawBars(box, cfg) {
+    var W = Math.max(280, box.clientWidth), H = Math.max(160, box.clientHeight || cfg.height || 280), mobile = W < 620;
+    var ms = cfg.months, n = ms.length, last = n - 1;
+    var mx = Math.max(1, cfg.avg || 0, cfg.proj || 0); ms.forEach(function (m) { mx = Math.max(mx, m.rec, m.desp); });
+    var nk = nice(mx * 1.06, 0), L = axisW(nk, mobile) + 6, R = 8, T = 22, B = 24;
+    var y = function (v) { return T + (H - T - B) * (1 - v / (nk.hi || 1)); };
+    var st = (W - L - R) / n, cx = function (i) { return L + st * i + st / 2; }, bw = Math.min(st * .52, 46);
+    var best = -1; ms.forEach(function (m, i) { if (!(cfg.partialLast && i === last) && (best < 0 || m.rec > ms[best].rec)) best = i; });
+    var s = '<svg class="bars" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || '') + '">';
+    for (var v = 0; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (v === 0 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(CA.brl(v)) + '</text>';
+    ms.forEach(function (m, i) {
+      var x = cx(i) - bw / 2, part = cfg.partialLast && i === last, top = Math.max(m.rec, m.desp), r = Math.min(4, bw / 4);
+      s += '<g class="col" data-i="' + i + '">';
+      if (top > 0) {
+        s += '<path class="b' + (part ? ' part' : i === best ? ' best' : '') + '" d="' + topRound(x, y(top), bw, y(0) - y(top), r) + '"/>';
+        if (m.desp > 0) { var hd = Math.max(3, y(0) - y(m.desp)); s += '<path class="dsp" d="' + topRound(x, y(top), bw, Math.min(hd, y(0) - y(top)), r) + '"/>'; }
+      }
+      if (part && cfg.proj > top) s += '<rect class="proj" x="' + x + '" y="' + y(cfg.proj) + '" width="' + bw + '" height="' + (y(top) - y(cfg.proj)) + '" rx="' + r + '"/>';
+      var lbl = i === best || (part && (m.rec > 0 || cfg.proj > 0));
+      if (lbl) { var ly = part ? y(Math.max(top, cfg.proj || 0)) : y(top); s += '<text class="bl pv' + (i === best ? ' b' : '') + '" x="' + Math.min(cx(i), W - R - 34) + '" y="' + (ly - 7) + '" text-anchor="middle">' + esc(CA.brl(m.rec)) + '</text>'; }
+      s += '<text class="xt' + (part ? ' now' : '') + '" x="' + cx(i) + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(cfg.tick(i)) + '</text></g>';
+    });
+    if (cfg.avg > 0) s += '<line class="avg" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(cfg.avg) + '" y2="' + y(cfg.avg) + '"/><text class="avgt" x="' + (L + 8) + '" y="' + (y(cfg.avg) - 6) + '">média mensal ' + esc(CA.brl(cfg.avg)) + '</text>';
+    s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';
+    box.innerHTML = s;
+    var svg = box.querySelector('svg'), tip = box.querySelector('.tip'), cols = svg.querySelectorAll('.col'), lastI = -1;
+    function show(clientX) {
+      var rr = svg.getBoundingClientRect(), k = Math.max(0, Math.min(n - 1, Math.floor((clientX - rr.left - L) / st)));
+      if (k === lastI) return; lastI = k;
+      svg.classList.add('hov'); cols.forEach(function (c) { c.classList.toggle('on', +c.getAttribute('data-i') === k); });
+      tip.innerHTML = cfg.tip(k); tip.hidden = false;
+      var tw = tip.offsetWidth, left = cx(k) + bw / 2 + 12; if (left + tw > W - 4) left = cx(k) - bw / 2 - tw - 12; if (left < 4) left = 4;
+      tip.style.left = left + 'px';
+    }
+    function hide() { tip.hidden = true; svg.classList.remove('hov'); lastI = -1; }
     svg.addEventListener('pointermove', function (e) { show(e.clientX); });
     svg.addEventListener('pointerdown', function (e) { show(e.clientX); });
     svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hide(); });
