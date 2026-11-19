@@ -51,7 +51,7 @@
   --shadow: 0 1px 2px rgba(17, 20, 57, .06), 0 4px 16px rgba(17, 20, 57, .05);
   --shadow-pop: 0 12px 40px rgba(17, 20, 57, .22);
   --focus: 0 0 0 3px rgba(79, 70, 229, .35);
-  --maxw: 1440px;
+  --maxw: 100%;
   --fs-xs: .75rem;
   --fs-s: .8125rem;
   --fs: .9375rem;
@@ -744,3 +744,99 @@ button.kc:hover { background: var(--surface-2); }
 @media (max-width: 1180px) { .dash { grid-template-columns: 1fr; } .takeaways { position: static; } }
 @media (max-width: 860px) { .dash-row { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .gauge { flex-direction: column; text-align: center; } .g-txt { align-items: center; } }
+
+/* =========== Painel em uma tela =========== */
+.pn { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "k k k k" "c c c s" "a b d e"; gap: 10px; }
+.kstrip1 { grid-area: k; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-l); box-shadow: var(--shadow); overflow: hidden; position: relative; }
+.kstrip1::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--band); }
+.kstrip1 .kc { padding: 10px 14px 9px; }
+.kstrip1 .kc.out b { color: var(--out); }
+.kstrip1 .kc.gold b { color: var(--gold-ink); }
+.kstrip1 .kc.hl b { color: var(--in); }
+.pn-chart { grid-area: c; min-width: 0; }
+.pn-chart .panel-b { padding-top: 0; padding-bottom: 8px; }
+.pn-side { grid-area: s; display: flex; flex-direction: column; min-width: 0; }
+.pn-g { display: grid; grid-template-columns: 1fr 1fr; padding: 6px 8px 0; }
+.pn-g .gauge { flex-direction: column; text-align: center; padding: 6px 4px 8px; gap: 2px; border: 0; }
+.pn-g .gauge + .gauge { border: 0; }
+.pn-g .gauge:nth-child(n+3) { border-top: 1px solid var(--line); }
+.pn-g .gauge:nth-child(even) { border-left: 1px solid var(--line); }
+.pn-g .g-txt { align-items: center; }
+.pn-g .g-txt .g-s { white-space: normal; }
+.pn-tk { margin: auto 14px 0; padding: 8px 10px; border-radius: var(--radius); background: var(--surface-2); font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.45; }
+.pn-tk b { color: var(--ink); }
+.pn-more { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 14px 12px; }
+.pn-more .btn { min-height: 30px; font-size: var(--fs-xs); padding: 0 8px; }
+.pn-l { min-width: 0; }
+.pn-l .panel-h h2 { display: flex; align-items: center; gap: 6px; }
+.pn-l .cnt { font-size: var(--fs-xs); font-weight: 800; background: var(--surface-2); color: var(--muted); border-radius: 999px; padding: 1px 7px; }
+.pn-l .panel-b { padding: 4px 14px 8px; }
+.pn-l .row { padding: 6px 0; }
+.pn-l .row .main span { font-size: var(--fs-xs); }
+.pn-l .rows > .row:first-child { border-top: 0; }
+.pn-empty { padding: 14px 0; color: var(--muted); font-size: var(--fs-s); text-align: center; }
+.pn > :nth-child(4) { grid-area: a; } .pn > :nth-child(5) { grid-area: b; } .pn > :nth-child(6) { grid-area: d; } .pn > :nth-child(7) { grid-area: e; }
+.drawer .takeaways { position: static; border-radius: var(--radius-l); }
+.drawer .dre-p { overflow: hidden; }
+@media (max-width: 1100px) {
+  .pn { grid-template-columns: 1fr 1fr; grid-template-areas: "k k" "c c" "s s" "a b" "d e"; }
+  .kstrip1 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kstrip1 .kc:nth-child(4) { border-left: 0; }
+  .kstrip1 .kc:nth-child(n+4) { border-top: 1px solid var(--line); }
+  .pn-g { grid-template-columns: repeat(4, 1fr); }
+  .pn-g .gauge:nth-child(n+3) { border-top: 0; }
+  .pn-g .gauge + .gauge { border-left: 1px solid var(--line); }
+}
+@media (max-width: 640px) {
+  .pn { grid-template-columns: 1fr; grid-template-areas: "k" "c" "s" "a" "b" "d" "e"; }
+  .kstrip1 { grid-template-columns: 1fr 1fr; }
+  .kstrip1 .kc:nth-child(odd) { border-left: 0; }
+  .kstrip1 .kc:nth-child(4) { border-left: 1px solid var(--line); }
+  .kstrip1 .kc:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .pn-g { grid-template-columns: 1fr 1fr; }
+  .pn-g .gauge:nth-child(3) { border-left: 0; }
+  .pn-g .gauge:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+.pn-g .gauge { flex-direction: row; text-align: left; gap: 8px; padding: 7px 6px; align-items: center; }
+.pn-g .g-txt { align-items: flex-start; }
+.pn-g .g-w { width: 54px; height: 50px; }
+.pn-g .g-w svg { width: 54px; height: 54px; }
+.pn-g .g-w b { top: 17px; font-size: .78rem; }
+.pn-g .g-txt .g-l { font-size: var(--fs-xs); }
+.pn-g .g-txt .g-s { font-size: .625rem; line-height: 1.3; }
+.pn-side .panel-h { padding-top: 10px; }
+.pn-tk { margin-top: 6px; padding: 6px 9px; }
+.pn-more { padding: 6px 14px 10px; }
+.kstrip1 .kc { padding: 8px 14px 7px; }
+.pn-chart .panel-h { padding-top: 10px; }
+.pn-l .panel-h { padding-top: 10px; }
+.pn-l .panel-b { padding: 2px 14px 6px; }
+.pn-l .row { padding: 5px 0; }
+.pn-l .when { padding: 2px 0; }
+@media (min-width: 761px) { .view { padding-bottom: 16px; } }
+@media (max-width: 640px) { .pn-g .gauge { flex-direction: column; text-align: center; } .pn-g .g-txt { align-items: center; } }
+.pn-tk { display: none; }
+.pn-g .g-txt .g-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.pn-g .g-txt { overflow: hidden; }
+.pn-g .gauge { padding: 4px 6px; }
+.kstrip1 .kc { padding: 7px 14px 6px; gap: 0; }
+.kstrip1 .kc b { line-height: 1.25; }
+.pn-l .panel-h { padding-top: 8px; }
+.pn-l .panel-h .btn-ghost { min-height: 26px; }
+.pn-l .row { padding: 4px 0; }
+.pn-l .row .main b { line-height: 1.3; }
+.pn-l .row .main span { line-height: 1.3; }
+.pn-chart .panel-h .seg button { padding: 4px 10px; }
+.pn { gap: 10px; }
+.pn-g { flex: 1; align-content: space-evenly; }
+.pn-g { align-content: center; }
+@media (min-width: 1101px) and (min-height: 820px) {
+  .pn-g .gauge { flex-direction: column; text-align: center; padding: 14px 8px; gap: 6px; }
+  .pn-g .g-txt { align-items: center; }
+  .pn-g .g-w { width: 100px; height: 92px; }
+  .pn-g .g-w svg { width: 100px; height: 100px; }
+  .pn-g .g-w b { top: 34px; font-size: 1.2rem; }
+  .pn-g .g-txt .g-l { font-size: var(--fs-s); }
+  .pn-g .g-txt .g-s { font-size: var(--fs-xs); white-space: normal; }
+}
+.drawer .takeaways li { font-size: var(--fs-s); padding: 11px 0 11px 18px; }
