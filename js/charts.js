@@ -18,12 +18,9 @@
     var step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
     return { step: step, lo: Math.floor(min / step) * step, hi: Math.ceil(max / step) * step };
   }
-  function kfmt(v) {
-    var a = Math.abs(v);
-    if (a >= 1000) return (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: a >= 10000 ? 0 : 1 }) + ' mil';
-    return Math.round(v).toLocaleString('pt-BR');
-  }
+  function kfmt(v) { return CA.brl(v); }
   CA.kfmt = kfmt;
+  function axisW(nk, mobile) { var w = Math.max(CA.brl(nk.hi).length, CA.brl(nk.lo).length); return Math.round(w * (mobile ? 5.6 : 6.1)) + 12; }
   /* Curva monotônica (não passa do ponto, sem "ondas" falsas) */
   function smooth(pts) {
     var n = pts.length; if (n < 2) return pts.length ? 'M' + pts[0][0] + ',' + pts[0][1] : '';
@@ -64,11 +61,12 @@
   function draw(box, cfg) {
     var W = Math.max(280, box.clientWidth), H = cfg.height || 280, mobile = W < 560;
     var n = cfg.labels.length; if (!n) { box.innerHTML = '<div class="empty">Sem dados para o período.</div>'; return; }
-    var L = mobile ? 40 : 54, R = 12, T = 14, B = 30;
+    var R = 12, T = 14, B = 30, L;
     var all = []; cfg.series.forEach(function (s) { if (!s.hidden) s.values.forEach(function (v) { if (v != null && isFinite(v)) all.push(v); }); });
     var hasBar = cfg.series.some(function (s) { return s.type === 'bar' && !s.hidden; });
     var mx = Math.max.apply(null, all.concat([0])), mn = Math.min.apply(null, all.concat([0]));
     var nk = nice(mx || 1, mn < 0 ? mn : 0);
+    L = axisW(nk, mobile);
     var y = function (v) { return T + (H - T - B) * (1 - (v - nk.lo) / ((nk.hi - nk.lo) || 1)); };
     var step = (W - L - R) / n, cx = function (i) { return L + step * i + step / 2; };
     var s = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || 'Gráfico') + '">';
@@ -127,76 +125,75 @@
   }
 
 
-  /* ===== Gráfico principal do painel =====
-     cfg = { kind:'hero', mode:'comp'|'yoy', cur:[{ym,rec,desp,res}], prev:[...12 meses anteriores], tip: fn(i), height } */
-  function topRound(x, y, w, h, r) {
-    r = Math.max(0, Math.min(r, w / 2, h));
-    return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
-  }
+  /* ===== Gráfico principal do painel: colunas empilhadas (lucro + despesas por grupo) e linha da receita =====
+     cfg = { kind:'hero', months:[{ym,rec,desp,res,g:{grupo:valor}}], groups:[[nome,cor]], partialLast, tick:fn(i), tip:fn(i) } */
+  function txtW(t, px) { return t.length * px * .56; }
   function drawHero(box, cfg) {
-    var W = Math.max(280, box.clientWidth), H = cfg.height || 300, mobile = W < 560, id = box.getAttribute('data-chart');
-    var cur = cfg.cur, prev = cfg.prev, n = cur.length, yoy = cfg.mode === 'yoy';
-    var L = mobile ? 34 : 46, R = mobile ? 6 : 10, T = 28, B = 30;
-    var hasPrev = prev.some(function (m) { return m.rec > 0; });
-    var mx = 0; cur.forEach(function (m, i) { mx = Math.max(mx, m.rec, m.desp, hasPrev ? prev[i].rec : 0); });
-    var nk = nice((mx || 1) * 1.04, 0);
+    var W = Math.max(280, box.clientWidth), H = cfg.height || 320, mobile = W < 620, id = box.getAttribute('data-chart');
+    var ms = cfg.months, n = ms.length, groups = cfg.groups;
+    var mx = 0; ms.forEach(function (m) { mx = Math.max(mx, m.rec, m.desp); });
+    var nk = nice((mx || 1) * 1.08, 0);
+    var callW = mobile ? 0 : 150, L = axisW(nk, mobile) + (mobile ? 0 : 18), R = (mobile ? 6 : 10) + callW, T = 38, B = 34;
     var y = function (v) { return T + (H - T - B) * (1 - v / (nk.hi || 1)); };
     var step = (W - L - R) / n, cx = function (i) { return L + step * i + step / 2; };
-    var best = 0; cur.forEach(function (m, i) { if (i < n - 1 && m.rec > cur[best].rec) best = i; });
-    var s = '<svg class="hero' + (yoy ? ' yoy' : '') + '" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || '') + '"><defs>'
-      + '<linearGradient id="' + id + 'gP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--hero-a)"/><stop offset="1" style="stop-color:var(--hero-b)"/></linearGradient>'
-      + '<linearGradient id="' + id + 'gD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--out);stop-opacity:.95"/><stop offset="1" style="stop-color:var(--out);stop-opacity:.7"/></linearGradient>'
-      + '<linearGradient id="' + id + 'aC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--hero-a);stop-opacity:.34"/><stop offset="1" style="stop-color:var(--hero-a);stop-opacity:0"/></linearGradient>'
-      + '<linearGradient id="' + id + 'aP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--hero-ghost);stop-opacity:.30"/><stop offset="1" style="stop-color:var(--hero-ghost);stop-opacity:0"/></linearGradient>'
-      + '<pattern id="' + id + 'hx" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" style="fill:var(--hero-a);opacity:.16"/><line x1="0" y1="0" x2="0" y2="6" style="stroke:var(--hero-a);stroke-width:2.2;opacity:.55"/></pattern>'
-      + '</defs>';
-    for (var v = 0; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (v === 0 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + (v ? kfmt(v).replace(' mil', 'k') : '0') + '</text>';
-    var i;
-    if (!yoy) {
-      var gw = Math.min(step * .56, mobile ? 20 : 34);
-      for (i = 0; i < n; i++) {
-        var m = cur[i], x = cx(i) - gw / 2, part = cfg.partialLast && i === n - 1;
-        var lucro = Math.max(0, m.rec - m.desp), dsp = Math.min(m.desp, Math.max(m.rec, m.desp)), top = Math.max(m.rec, m.desp);
-        s += '<g class="col' + (i === best ? ' best' : '') + '" data-i="' + i + '">';
-        if (top > 0) {
-          var yT = y(top), yL = y(lucro), y0 = y(0);
-          // coluna inteira com cantos superiores arredondados; lucro embaixo, despesas em cima
-          s += '<clipPath id="' + id + 'c' + i + '"><path d="' + topRound(x, yT, gw, y0 - yT, mobile ? 4 : 6) + '"/></clipPath><g clip-path="url(#' + id + 'c' + i + ')">';
-          if (lucro > 0) s += '<rect x="' + x + '" y="' + yL + '" width="' + gw + '" height="' + (y0 - yL) + '" style="fill:url(#' + id + (part ? 'hx' : 'gP') + ')"/>';
-          if (dsp > 0) s += '<rect x="' + x + '" y="' + yT + '" width="' + gw + '" height="' + Math.max(0, yL - yT - (lucro > 0 ? 1.5 : 0)) + '" style="fill:url(#' + id + 'gD)' + (part ? ';opacity:.5' : '') + '"/>';
-          s += '</g>';
-          var showLbl = !mobile || i === best || i === n - 1;
-          if (showLbl && m.rec > 0) s += '<text class="vlbl pv' + (i === best ? ' b' : '') + '" x="' + cx(i) + '" y="' + (yT - 8) + '" text-anchor="middle">' + kfmt(m.rec).replace(' mil', 'k') + '</text>';
+    var gw = Math.min(step * (n > 8 ? .6 : .7), 100), lx = [], best = 0;
+    ms.forEach(function (m, i) { if (!(cfg.partialLast && i === n - 1) && m.rec > ms[best].rec) best = i; });
+    var s = '<svg class="hero" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || '') + '">'
+      + '<defs><pattern id="' + id + 'hx" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#fff" stroke-width="2.4" opacity=".35"/></pattern></defs>';
+    for (var v = 0; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (v === 0 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R + (mobile ? 0 : 6)) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(CA.brl(v)) + '</text>';
+    if (!mobile) s += '<text class="ytit" transform="translate(12,' + ((T + H - B) / 2) + ') rotate(-90)" text-anchor="middle">Receita mensal (R$)</text>';
+    var i, segsLast = [];
+    for (i = 0; i < n; i++) {
+      var m = ms[i], x = cx(i) - gw / 2, part = cfg.partialLast && i === n - 1, base = 0;
+      var stack = [['Lucro líquido', 'var(--st-lucro)', Math.max(0, m.rec - m.desp), true]];
+      groups.forEach(function (g) { if (m.g[g[0]] > 0) stack.push([g[0], g[1], m.g[g[0]]]); });
+      s += '<g class="col" data-i="' + i + '">';
+      stack.forEach(function (sg) {
+        var y1 = y(base), y2 = y(base + sg[2]); base += sg[2];
+        var hgt = Math.max(0, y1 - y2);
+        s += '<rect x="' + x + '" y="' + y2 + '" width="' + gw + '" height="' + hgt + '" style="fill:' + sg[1] + '"/>';
+        if (part && hgt > 0) s += '<rect x="' + x + '" y="' + y2 + '" width="' + gw + '" height="' + hgt + '" fill="url(#' + id + 'hx)"/>';
+        if (i === n - 1) segsLast.push([sg[0], sg[1], (y1 + y2) / 2]);
+        if (sg[3] && hgt > 24) {
+          var t = CA.brl(sg[2]), fs = mobile ? 9.5 : 11;
+          if (txtW(t, fs) <= gw - 4) s += '<text class="inl pv" x="' + cx(i) + '" y="' + ((y1 + y2) / 2 + 4) + '" text-anchor="middle" style="font-size:' + fs + 'px">' + esc(t) + '</text>';
         }
-        s += '</g>';
-      }
-      if (hasPrev) for (i = 0; i < n; i++) if (prev[i].rec > 0) {
-        var ty = y(prev[i].rec), tw = gw / 2 + (mobile ? 3 : 6);
-        s += '<g class="col" data-i="' + i + '"><line class="tick-a" x1="' + (cx(i) - tw) + '" x2="' + (cx(i) + tw) + '" y1="' + ty + '" y2="' + ty + '"/><line class="tick" x1="' + (cx(i) - tw) + '" x2="' + (cx(i) + tw) + '" y1="' + ty + '" y2="' + ty + '"/></g>';
-      }
-    } else {
-      var pc = cur.map(function (m, k) { return [cx(k), y(m.rec)]; }), dC = smooth(pc), y0b = y(0);
-      if (hasPrev) {
-        var pq = prev.map(function (m, k) { return [cx(k), y(m.rec)]; }), dP = smooth(pq);
-        s += '<path d="' + dP + 'L' + pq[n - 1][0] + ',' + y0b + 'L' + pq[0][0] + ',' + y0b + 'Z" style="fill:url(#' + id + 'aP)"/><path class="ln yp" d="' + dP + '"/>';
-      }
-      s += '<path d="' + dC + 'L' + pc[n - 1][0] + ',' + y0b + 'L' + pc[0][0] + ',' + y0b + 'Z" style="fill:url(#' + id + 'aC)"/><path class="ln yc" d="' + dC + '"/>';
-      pc.forEach(function (p, k) { s += '<g class="col" data-i="' + k + '"><circle class="yd" cx="' + p[0] + '" cy="' + p[1] + '" r="' + (k === n - 1 ? 4.5 : 3) + '"/></g>'; });
+      });
+      s += '</g>';
+      lx.push([cx(i), y(m.rec)]);
     }
-    for (i = 0; i < n; i++) s += '<text class="xt' + (i === n - 1 ? ' now' : '') + '" x="' + cx(i) + '" y="' + (H - 9) + '" text-anchor="middle">' + esc(cfg.tick(i)) + '</text>';
-    s += '<line class="guide" x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '" style="opacity:0"/><rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + (H - B) + '" fill="transparent"/></svg><div class="tip" hidden></div>';
+    // linha da receita
+    s += '<path class="rln" d="M' + lx.map(function (p) { return p[0] + ',' + p[1]; }).join('L') + '"/>';
+    var lfs = mobile ? 9.5 : 11.5;
+    lx.forEach(function (p, k) {
+      s += '<g class="col" data-i="' + k + '"><circle class="rdot" cx="' + p[0] + '" cy="' + p[1] + '" r="' + (mobile ? 4 : 5.5) + '"/>';
+      var t = CA.brl(ms[k].rec), fits = txtW(t, lfs) <= step - 4;
+      if (fits || k === best || k === n - 1) s += '<text class="rlbl pv' + (k === best ? ' b' : '') + '" x="' + Math.min(Math.max(p[0], L + txtW(t, lfs) / 2), W - R - txtW(t, lfs) / 2 + (mobile ? 0 : 8)) + '" y="' + (p[1] - 12) + '" text-anchor="middle" style="font-size:' + lfs + 'px">' + esc(t) + '</text>';
+      s += '</g>';
+    });
+    // rótulos com setas (como na referência), alinhados à última coluna
+    if (!mobile) {
+      var ax = cx(n - 1) + gw / 2, tx = W - callW + 22, items = [['Receita', 'var(--st-line)', lx[n - 1][1], true]].concat(segsLast.slice().reverse());
+      var lastY = -1e9; items.forEach(function (it) { it.ly = Math.max(it[2], lastY + 19); lastY = it.ly; });
+      var over = lastY - (H - B - 4); if (over > 0) items.forEach(function (it) { it.ly -= over; });
+      items.forEach(function (it) {
+        var sx = it[3] ? lx[n - 1][0] + 8 : ax;
+        s += '<g class="callout"><circle cx="' + sx + '" cy="' + it[2] + '" r="3.2" style="fill:var(--surface);stroke:' + it[1] + '"/><path d="M' + (sx + 3.5) + ',' + it[2] + ' L' + (tx - 22) + ',' + it[2] + ' L' + (tx - 12) + ',' + it.ly + ' L' + (tx - 6) + ',' + it.ly + '"/><path class="arw" d="M' + (tx - 6) + ',' + (it.ly - 3.5) + ' L' + (tx - 1) + ',' + it.ly + ' L' + (tx - 6) + ',' + (it.ly + 3.5) + 'Z"/><text x="' + (tx + 3) + '" y="' + (it.ly + 4) + '">' + esc(it[0]) + '</text></g>';
+      });
+    }
+    for (i = 0; i < n; i++) s += '<text class="xt' + (cfg.partialLast && i === n - 1 ? ' now' : '') + '" x="' + cx(i) + '" y="' + (H - 14) + '" text-anchor="middle">' + esc(cfg.tick(i)) + '</text>' + (cfg.partialLast && i === n - 1 ? '<text class="xs" x="' + cx(i) + '" y="' + (H - 2) + '" text-anchor="middle">em andamento</text>' : '');
+    s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + (H - B) + '" fill="transparent"/></svg><div class="tip" hidden></div>';
     box.innerHTML = s;
-    var svg = box.querySelector('svg'), tip = box.querySelector('.tip'), guide = box.querySelector('.guide'), cols = svg.querySelectorAll('.col'), last = -1;
+    var svg = box.querySelector('svg'), tip = box.querySelector('.tip'), cols = svg.querySelectorAll('.col'), last = -1;
     function show(clientX) {
       var r = svg.getBoundingClientRect(), k = Math.max(0, Math.min(n - 1, Math.floor((clientX - r.left - L) / step)));
       if (k === last) return; last = k;
       svg.classList.add('hov'); cols.forEach(function (c) { c.classList.toggle('on', +c.getAttribute('data-i') === k); });
-      if (yoy) { guide.setAttribute('x1', cx(k)); guide.setAttribute('x2', cx(k)); guide.style.opacity = 1; }
       tip.innerHTML = cfg.tip(k); tip.hidden = false;
-      var tw = tip.offsetWidth, left = cx(k) + 18; if (left + tw > W - 4) left = cx(k) - tw - 18; if (left < 4) left = 4;
+      var tw = tip.offsetWidth, left = cx(k) + gw / 2 + 12; if (left + tw > W - 4) left = cx(k) - gw / 2 - tw - 12; if (left < 4) left = 4;
       tip.style.left = left + 'px';
     }
-    function hide() { tip.hidden = true; guide.style.opacity = 0; svg.classList.remove('hov'); last = -1; }
+    function hide() { tip.hidden = true; svg.classList.remove('hov'); last = -1; }
     svg.addEventListener('pointermove', function (e) { show(e.clientX); });
     svg.addEventListener('pointerdown', function (e) { show(e.clientX); });
     svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hide(); });

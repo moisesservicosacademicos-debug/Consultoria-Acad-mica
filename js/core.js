@@ -6,7 +6,7 @@ window.CA = window.CA || {};
     url: 'https://teemhlpfcnhfwveedmym.supabase.co',
     key: 'sb_publishable_DQ9AGXIkznhUj_bg-whWFg_YjYlmMtl',
     ws: 'nova_empresa_main',
-    version: '2.2.0',
+    version: '2.3.0',
     poll: 30000
   };
 
@@ -41,7 +41,7 @@ window.CA = window.CA || {};
   var fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   var fmtBRL0 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
   CA.brl = function (n) { return fmtBRL.format(Number(n) || 0); };
-  CA.brl0 = function (n) { return fmtBRL0.format(Math.round(Number(n) || 0)); };
+  CA.brl0 = function (n) { return fmtBRL.format(Number(n) || 0); }; // padrão único: sempre com centavos
   CA.pct = function (n) { return Math.round((Number(n) || 0) * 100) + '%'; };
   var pad = function (n) { return (n < 10 ? '0' : '') + n; };
   var isoOf = CA.isoOf = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
