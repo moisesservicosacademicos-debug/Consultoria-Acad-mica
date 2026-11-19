@@ -8,7 +8,7 @@
     { id: 'clientes', label: 'Clientes', icon: 'users', subs: [['base', 'Base de acadêmicos'], ['acessos', 'Acessos de portal']] },
     { id: 'mensalidades', label: 'Mensalidades', icon: 'repeat', subs: [['situacao', 'Situação dos mensalistas'], ['competencia', 'Competência do mês'], ['pagamentos', 'Pagamentos recebidos']] },
     { id: 'servicos', label: 'Serviços', icon: 'file', subs: [['andamento', 'Em andamento'], ['receber', 'A receber'], ['concluidos', 'Concluídos'], ['catalogo', 'Catálogo']] },
-    { id: 'financeiro', label: 'Financeiro', icon: 'chart', subs: [['resumo', 'Resultado do mês'], ['extrato', 'Extrato'], ['despesas', 'Despesas'], ['anual', 'Ano a ano']] },
+    { id: 'financeiro', label: 'Financeiro', icon: 'chart', subs: [['resumo', 'Resultado do mês'], ['evolucao', 'Evolução desde o início'], ['extrato', 'Extrato'], ['despesas', 'Despesas'], ['anual', 'Tabela ano a ano']] },
     { id: 'agenda', label: 'Agenda', icon: 'cal', subs: [['prazos', 'Prazos de entrega'], ['agendamentos', 'Agendamentos']] },
     { id: 'crm', label: 'CRM', icon: 'target', subs: [['funil', 'Funil'], ['contatos', 'Contatos']] }
   ];
@@ -48,6 +48,7 @@
     $('view').innerHTML = fn(M);
     document.querySelectorAll('#view details.grp[data-k]').forEach(function (dt) { if (keepOpen[dt.getAttribute('data-k')]) dt.open = true; });
     bindView();
+    CA.mountCharts($('view'));
     if (scrollTop) window.scrollTo(0, 0); else window.scrollTo(0, y);
     document.title = area.label + ' · Consultoria Acadêmica';
   };
@@ -85,27 +86,32 @@
   }
   var TIPO = CA.TIPO = { mens: ['Mensalidades', 'var(--in)'], event: ['Serviços eventuais', 'var(--action)'], extra: ['Extras de mensalistas', '#E0922A'], outro: ['Outros recebimentos', 'var(--muted)'] };
 
-  /* Gráfico de 12 meses: barras de receita e despesa, linha de resultado */
+  var C = CA.C = { rec: 'var(--in)', desp: 'var(--out)', res: 'var(--action)', trend: 'var(--gold)' };
+  function lbl(ym) { return CA.MES3[+ym.slice(5, 7) - 1] + '/' + ym.slice(2, 4); }
+  CA.lbl = lbl;
+  function varPct(a, b) { if (!b) return ''; var p = Math.round((a - b) / Math.abs(b) * 100); return '<span class="' + (p >= 0 ? 'in' : 'out') + '">' + (p >= 0 ? '▲ ' : '▼ ') + Math.abs(p) + '%</span>'; }
+  CA.varPct = varPct;
+  function monthTip(sr, i, curYm, extra) {
+    var m = sr[i], prev = sr[i - 1], marg = m.rec ? Math.round(m.res / m.rec * 100) + '%' : '—';
+    return CA.tipMonth(CA.ymLabel(m.ym) + (m.ym === curYm ? ' · parcial' : ''), [
+      ['Receita', brl(m.rec), C.rec], ['Despesas', brl(m.desp), C.desp], ['Lucro líquido', '<b>' + brl(m.res) + '</b>', C.res]
+    ].concat(extra || []), 'Margem ' + marg + (prev && prev.rec ? ' · receita ' + varPct(m.rec, prev.rec) + ' sobre ' + CA.MES3[+prev.ym.slice(5, 7) - 1] : ''));
+  }
+  /* Painel: últimos 12 meses com detalhe por mês */
   function chart12(M) {
-    var end = CA.today().slice(0, 7), ms = [];
-    for (var i = 11; i >= 0; i--) ms.push(M.monthOf(CA.ymAdd(end, -i)));
-    var W = 720, H = 220, L = 46, B = 26, T = 10, w = (W - L - 8) / 12;
-    var max = Math.max(1, Math.max.apply(null, ms.map(function (m) { return Math.max(m.rec, m.desp); })));
-    var min = Math.min(0, Math.min.apply(null, ms.map(function (m) { return m.res; })));
-    var y = function (v) { return T + (H - T - B) * (1 - (v - min) / (max - min)); };
-    var step = Math.pow(10, Math.floor(Math.log10(max))) || 1; if (max / step < 3) step /= 2;
-    var g = '';
-    for (var v = 0; v <= max; v += step) g += '<line class="gl" x1="' + L + '" x2="' + W + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + (v >= 1000 ? (v / 1000).toLocaleString('pt-BR') + ' mil' : v) + '</text>';
-    var bars = '', pts = [], lab = '';
-    ms.forEach(function (m, i) {
-      var x = L + i * w + w * .16, bw = w * .3;
-      bars += '<rect class="br" x="' + x + '" y="' + y(m.rec) + '" width="' + bw + '" height="' + Math.max(0, y(0) - y(m.rec)) + '" rx="3"><title>' + CA.ymShort(m.ym) + ': recebido ' + brl(m.rec) + '</title></rect>';
-      bars += '<rect class="bd" x="' + (x + bw + 2) + '" y="' + y(m.desp) + '" width="' + bw + '" height="' + Math.max(0, y(0) - y(m.desp)) + '" rx="3"><title>' + CA.ymShort(m.ym) + ': despesas ' + brl(m.desp) + '</title></rect>';
-      pts.push([L + i * w + w / 2, y(m.res), m]);
-      lab += '<text x="' + (L + i * w + w / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + CA.MES3[+m.ym.slice(5, 7) - 1] + '</text>';
-    });
-    var line = '<polyline class="ln" points="' + pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ') + '"/>' + pts.map(function (p) { return '<circle class="pt" cx="' + p[0] + '" cy="' + p[1] + '" r="3.5"><title>' + CA.ymShort(p[2].ym) + ': resultado ' + brl(p[2].res) + '</title></circle>'; }).join('');
-    return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Receitas, despesas e resultado dos últimos 12 meses">' + g + bars + line + lab + '</svg>';
+    var end = M.hoje.slice(0, 7), sr = CA.monthSeries(M, CA.ymAdd(end, -11), end);
+    var closed = sr.slice(0, -1), rec12 = sr.reduce(function (t, m) { return t + m.rec; }, 0), res12 = sr.reduce(function (t, m) { return t + m.res; }, 0);
+    var media = closed.length ? closed.reduce(function (t, m) { return t + m.rec; }, 0) / closed.length : 0;
+    var best = sr.reduce(function (b, m) { return m.rec > b.rec ? m : b; }, sr[0]);
+    var tr = CA.movAvg(sr.map(function (m) { return m.rec; }), 3);
+    var stats = '<div class="cstats"><div><span>Receita em 12 meses</span><b class="num pv">' + brl0(rec12) + '</b></div><div><span>Lucro em 12 meses</span><b class="num pv">' + brl0(res12) + '</b></div><div><span>Média mensal</span><b class="num pv">' + brl0(media) + '</b></div><div><span>Melhor mês</span><b class="num pv">' + brl0(best.rec) + '</b><small>' + esc(CA.ymShort(best.ym).toLowerCase()) + '</small></div></div>';
+    return stats + CA.chart('painel12', {
+      aria: 'Receita, despesas e lucro dos últimos 12 meses', height: 260, partialLast: true,
+      labels: sr.map(function (m) { return m.ym; }), ticks: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1]; },
+      series: [{ type: 'bar', color: C.rec, values: sr.map(function (m) { return m.rec; }) }, { type: 'bar', color: C.desp, values: sr.map(function (m) { return m.desp; }) },
+        { type: 'dash', color: C.trend, values: tr }, { type: 'line', color: C.res, values: sr.map(function (m) { return m.res; }) }],
+      tip: function (i) { return monthTip(sr, i, end, tr[i] != null ? [['Tendência (3 meses)', brl(tr[i]), C.trend]] : []); }
+    }) + '<div class="legend" style="margin-top:8px"><span><i style="background:var(--in)"></i>Receita</span><span><i style="background:var(--out)"></i>Despesas</span><span><i class="ln-i" style="background:var(--action)"></i>Lucro líquido</span><span><i class="ln-i dash-i"></i>Tendência da receita (média de 3 meses)</span><span>Mês atual em tom claro, ainda parcial</span></div>';
   }
   function mix(m) {
     var tot = m.mens + m.event + m.extra + m.outro;
@@ -158,7 +164,7 @@
     out += '<div class="panel c3"><button class="kpi" data-go="servicos/receber"><span class="lb"><span class="dot" style="background:var(--warn)"></span>A receber de serviços</span><span class="vl num pv">' + brl(M.aReceber) + '</span><span class="ft">' + M.services.filter(function (s) { return s.saldo > 0; }).length + ' serviços com saldo</span></button></div>';
     out += '<div class="panel c3"><button class="kpi" data-go="mensalidades/situacao"><span class="lb"><span class="dot" style="background:var(--out)"></span>Mensalidades em atraso</span><span class="vl num pv ' + (M.atrasados.length ? 'out' : '') + '">' + M.atrasados.length + (M.atrasados.length ? ' · ' + brl(atrasoVal) : '') + '</span><span class="ft">' + (M.atrasados.length ? 'toque para ver quem' : 'ninguém em atraso') + '</span></button></div>';
 
-    out += '<section class="panel c8"><div class="panel-h"><h2>Últimos 12 meses</h2><div class="legend"><span><i style="background:var(--in)"></i>Receita</span><span><i style="background:var(--out)"></i>Despesas</span><span><i style="background:var(--action);height:3px;border-radius:2px"></i>Resultado</span></div></div><div class="panel-b">' + chart12(M) + '</div></section>';
+    out += '<section class="panel c8"><div class="panel-h"><h2>Últimos 12 meses</h2>' + lbtn('Ver evolução desde o início', 'go', ' data-go="financeiro/evolucao"') + '</div><div class="panel-b">' + chart12(M) + '</div></section>';
     out += '<section class="panel c4"><div class="panel-h"><h2>De onde veio a receita</h2><span class="muted">' + esc(CA.MES[+nowYm.slice(5, 7) - 1]) + '</span></div><div class="panel-b">' + mix(M.now) + '</div></section>';
 
     var pz = M.prazos.slice(0, 6);
@@ -355,6 +361,96 @@
     out += '<section class="panel c6"><div class="panel-h"><h2>Composição da receita</h2></div><div class="panel-b">' + mix(m) + '</div></section>';
     var gk = Object.keys(byG).sort(function (a, b) { return byG[b] - byG[a]; });
     out += '<section class="panel c6"><div class="panel-h"><h2>Despesas por grupo</h2></div><div class="panel-b">' + (gk.length ? '<div class="mix-l">' + gk.map(function (g) { return '<span class="sw" style="background:var(--out)"></span><span>' + esc(g) + '</span><span class="v num">' + brl(byG[g]) + '</span>'; }).join('') + '</div>' : empty('Sem despesas neste mês')) + '</div></section>';
+    out += '</div>';
+    return out;
+  };
+
+  /* ---------- Evolução desde o início ---------- */
+  VIEWS['financeiro/evolucao'] = function (M) {
+    var end = M.hoje.slice(0, 7);
+    if (!M.months.length) return head('Evolução desde o início') + '<div class="panel">' + empty('Ainda não há lançamentos financeiros') + '</div>';
+    var start = M.months[0].ym, sr = CA.monthSeries(M, start, end), n = sr.length, ui = CA.S.ui;
+    var hide = ui.evoHide || {};
+    var tr = CA.movAvg(sr.map(function (m) { return m.rec; }), 3);
+    var acc = 0, accArr = sr.map(function (m) { acc += m.res; return Math.round(acc * 100) / 100; });
+    var recAcc = sr.reduce(function (t, m) { return t + m.rec; }, 0), despAcc = sr.reduce(function (t, m) { return t + m.desp; }, 0), resAcc = recAcc - despAcc;
+    var closed = sr.slice(0, -1), last12 = closed.slice(-12), prev12 = closed.slice(-24, -12);
+    var s12 = last12.reduce(function (t, m) { return t + m.rec; }, 0), p12 = prev12.reduce(function (t, m) { return t + m.rec; }, 0);
+    var best = sr.reduce(function (b, m) { return m.rec > b.rec ? m : b; }, sr[0]);
+    var firstDesp = sr.filter(function (m) { return m.desp > 0; })[0];
+    var out = head('Evolução desde o início', 'Desde ' + esc(CA.ymLabel(start).toLowerCase()) + ' · ' + n + ' meses de operação. Toque ou passe o mouse nos gráficos para ver cada mês.');
+    out += '<div class="grid">';
+    out += '<section class="ledger"><div><div class="lb">Receita acumulada</div><div class="vl num pv">' + brl0(recAcc) + '</div><div class="ft">' + n + ' meses</div></div>'
+      + '<div><div class="lb">Despesas acumuladas</div><div class="vl sm num pv">' + brl0(despAcc) + '</div><div class="ft">' + (firstDesp ? 'lançadas desde ' + esc(CA.ymShort(firstDesp.ym).toLowerCase()) : 'nenhuma lançada') + '</div></div>'
+      + '<div><div class="lb">Lucro líquido acumulado</div><div class="vl sm num pv pos">' + brl0(resAcc) + '</div><div class="ft">tudo o que a consultoria já gerou</div></div>'
+      + '<div><div class="lb">Margem líquida</div><div class="vl sm num gold">' + (recAcc ? Math.round(resAcc / recAcc * 100) : 0) + '%</div><div class="ft">no período todo</div></div></section>';
+    out += '<div class="panel c4"><div class="kpi"><span class="lb">Receita nos últimos 12 meses</span><span class="vl num pv">' + brl0(s12) + '</span><span class="ft">' + (p12 ? varPct(s12, p12) + ' sobre os 12 meses anteriores' : 'meses fechados') + '</span></div></div>';
+    out += '<div class="panel c4"><div class="kpi"><span class="lb">Média mensal</span><span class="vl num pv">' + brl0(last12.length ? s12 / last12.length : 0) + '</span><span class="ft">nos últimos ' + last12.length + ' meses fechados</span></div></div>';
+    out += '<div class="panel c4"><div class="kpi"><span class="lb">Melhor mês</span><span class="vl num pv">' + brl0(best.rec) + '</span><span class="ft">' + esc(CA.ymLabel(best.ym)) + '</span></div></div>';
+    if (firstDesp && firstDesp.ym > start) out += '<div class="note info c12">As despesas passaram a ser lançadas em ' + esc(CA.ymLabel(firstDesp.ym).toLowerCase()) + '. Antes disso, o lucro de cada mês aparece igual à receita.</div>';
+
+    // 1. mês a mês
+    var tg = function (k, label, color) { return '<button type="button" class="tgl" data-act="evoToggle" data-k="' + k + '" aria-pressed="' + (!hide[k]) + '"><i style="background:' + color + '"></i>' + label + '</button>'; };
+    out += '<section class="panel c12"><div class="panel-h"><div><h2>Receita, despesas e lucro mês a mês</h2><span class="muted">Desde ' + esc(CA.ymShort(start).toLowerCase()) + ' até hoje</span></div><div class="tgls">' + tg('rec', 'Receita', C.rec) + tg('desp', 'Despesas', C.desp) + tg('res', 'Lucro líquido', C.res) + tg('trend', 'Tendência', C.trend) + '</div></div><div class="panel-b">'
+      + CA.chart('evoMes', {
+        aria: 'Evolução mensal de receita, despesas e lucro desde o início', height: 320, yearBands: true,
+        labels: sr.map(function (m) { return m.ym; }),
+        ticks: function (i, every) { var ym = sr[i].ym; return i === 0 || ym.slice(5, 7) === '01' ? (ym.slice(5, 7) === '01' ? ym.slice(0, 4) : lbl(ym)) : (n <= 18 && i % every === 0 ? CA.MES3[+ym.slice(5, 7) - 1] : ''); },
+        series: [
+          { type: 'line', color: C.res, values: sr.map(function (m) { return m.res; }), hidden: hide.res, width: 2 },
+          { type: 'line', color: C.desp, values: sr.map(function (m) { return m.desp; }), hidden: hide.desp, width: 2 },
+          { type: 'dash', color: C.trend, values: tr, hidden: hide.trend },
+          { type: 'area', color: C.rec, values: sr.map(function (m) { return m.rec; }), hidden: hide.rec, width: 2.5 }],
+        tip: function (i) { return monthTip(sr, i, end, tr[i] != null ? [['Tendência (3 meses)', brl(tr[i]), C.trend]] : []); }
+      }) + '</div></section>';
+
+    // 2. lucro acumulado + marcos
+    var steps = [5000, 10000, 20000, 30000, 40000, 50000, 75000, 100000, 150000, 200000, 300000, 500000], marks = [];
+    steps.forEach(function (st) { for (var i = 0; i < n; i++) if (accArr[i] >= st) { marks.push({ i: i, v: accArr[i], st: st, label: CA.kfmt(st) }); break; } });
+    var nextGoal = steps.filter(function (st) { return st > accArr[n - 1]; })[0];
+    out += '<section class="panel c8"><div class="panel-h"><div><h2>Lucro líquido acumulado</h2><span class="muted">Somado mês a mês desde o início</span></div><b class="num pv in" style="font-size:var(--fs-l)">' + brl(accArr[n - 1]) + '</b></div><div class="panel-b">'
+      + CA.chart('evoAcc', {
+        aria: 'Lucro líquido acumulado desde o início', height: 280, yearBands: true,
+        labels: sr.map(function (m) { return m.ym; }), ticks: function (i) { var ym = sr[i].ym; return i === 0 ? lbl(ym) : ym.slice(5, 7) === '01' ? ym.slice(0, 4) : ''; },
+        series: [{ type: 'area', color: C.res, values: accArr }],
+        markers: marks.map(function (mk) { return { i: mk.i, v: mk.v, label: 'R$ ' + mk.label }; }),
+        tip: function (i) { return CA.tipMonth(CA.ymLabel(sr[i].ym), [['Lucro do mês', brl(sr[i].res), C.res], ['Acumulado até aqui', '<b>' + brl(accArr[i]) + '</b>', 'var(--in)']]); }
+      }) + '</div></section>';
+    out += '<section class="panel c4"><div class="panel-h"><h2>Marcos alcançados</h2></div><div class="panel-b"><div class="rows">'
+      + (marks.length ? marks.slice().reverse().map(function (mk) { return '<div class="row"><div class="main"><b class="num">' + brl0(mk.st) + '</b></div><div class="val">' + esc(CA.ymLabel(sr[mk.i].ym)) + '</div></div>'; }).join('') : empty('Nenhum marco ainda'))
+      + '</div>' + (nextGoal ? '<div class="goal"><span>Próximo marco: <b class="num">' + brl0(nextGoal) + '</b></span><div class="bar-o"><i style="width:' + Math.min(100, accArr[n - 1] / nextGoal * 100) + '%"></i></div><small class="num pv">faltam ' + brl0(nextGoal - accArr[n - 1]) + '</small></div>' : '') + '</div></section>';
+
+    // 3. ano contra ano
+    var years = {}; sr.forEach(function (m) { var y = m.ym.slice(0, 4); var o = years[y] || (years[y] = { y: y, rec: 0, desp: 0, res: 0, meses: 0, last: m.ym }); o.rec += m.rec; o.desp += m.desp; o.res += m.res; o.meses++; o.last = m.ym; });
+    var ys = Object.keys(years).sort().map(function (k) { return years[k]; });
+    var curY = end.slice(0, 4), curM = +end.slice(5, 7);
+    out += '<section class="panel c7"><div class="panel-h"><div><h2>Ano contra ano</h2><span class="muted">Receita, despesas e lucro de cada ano' + (years[curY] ? ' · ' + curY + ' até ' + esc(CA.MES[curM - 1].toLowerCase()) : '') + '</span></div></div><div class="panel-b">'
+      + CA.chart('yoyBars', {
+        aria: 'Comparação anual de receita, despesas e lucro', height: 260, barMax: 120,
+        labels: ys.map(function (o) { return o.y; }), ticks: function (i) { var o = ys[i]; return o.y + (o.meses < 12 ? ' (' + o.meses + ' meses)' : ''); },
+        series: [{ type: 'bar', color: C.rec, values: ys.map(function (o) { return o.rec; }) }, { type: 'bar', color: C.desp, values: ys.map(function (o) { return o.desp; }) }, { type: 'bar', color: C.res, values: ys.map(function (o) { return o.res; }) }],
+        tip: function (i) { var o = ys[i], p = ys[i - 1]; return CA.tipMonth(o.y + (o.meses < 12 ? ' · ' + o.meses + ' meses' : ''), [['Receita', brl(o.rec), C.rec], ['Despesas', brl(o.desp), C.desp], ['Lucro líquido', '<b>' + brl(o.res) + '</b>', C.res]], 'Margem ' + (o.rec ? Math.round(o.res / o.rec * 100) : 0) + '% · média de ' + brl0(o.rec / o.meses) + ' por mês' + (p ? ' · receita ' + varPct(o.rec, p.rec) + ' sobre ' + p.y : '')); }
+      }) + '<div class="legend" style="margin-top:8px"><span><i style="background:var(--in)"></i>Receita</span><span><i style="background:var(--out)"></i>Despesas</span><span><i style="background:var(--action)"></i>Lucro líquido</span></div></div></section>';
+    // tabela + mesmo período
+    var prevY = String(+curY - 1), ytd = function (y) { var t = { rec: 0, res: 0 }; sr.forEach(function (m) { if (m.ym.slice(0, 4) === y && +m.ym.slice(5, 7) <= curM) { t.rec += m.rec; t.res += m.res; } }); return t; };
+    var a = ytd(curY), b = ytd(prevY);
+    out += '<section class="panel c5"><div class="panel-h"><h2>Resumo por ano</h2></div><div class="tbl-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>Ano</th><th class="r">Receita</th><th class="r">Lucro</th><th class="r">Margem</th><th class="r">Var.</th></tr></thead><tbody>'
+      + ys.slice().reverse().map(function (o) { var p = years[String(+o.y - 1)]; return '<tr><td class="strong">' + o.y + (o.meses < 12 ? '<span class="sub">' + o.meses + ' meses</span>' : '') + '</td><td class="r num pv">' + brl0(o.rec) + '</td><td class="r num pv strong">' + brl0(o.res) + '</td><td class="r num">' + (o.rec ? Math.round(o.res / o.rec * 100) : 0) + '%</td><td class="r num">' + (p ? varPct(o.rec, p.rec) : '—') + '</td></tr>'; }).join('')
+      + '</tbody></table></div>' + (years[prevY] && years[curY] ? '<div class="panel-b"><div class="review"><span><b>Mesmo período (jan a ' + esc(CA.MES3[curM - 1]) + ')</b></span><span>Receita: <b class="num pv">' + brl0(a.rec) + '</b> em ' + curY + ' contra <b class="num pv">' + brl0(b.rec) + '</b> em ' + prevY + ' ' + varPct(a.rec, b.rec) + '</span><span>Lucro: <b class="num pv">' + brl0(a.res) + '</b> contra <b class="num pv">' + brl0(b.res) + '</b> ' + varPct(a.res, b.res) + '</span></div></div>' : '') + '</section>';
+
+    // 4. mês a mês por ano
+    var metric = ui.yoyMetric || 'rec', MET = { rec: 'Receita', res: 'Lucro líquido', desp: 'Despesas' };
+    var palette = ['var(--line-strong)', 'var(--muted)', 'var(--gold)', 'var(--action)'];
+    var yk = ys.map(function (o) { return o.y; }), colors = yk.map(function (y, i) { return palette[Math.max(0, palette.length - yk.length + i)] || palette[0]; });
+    var yv = yk.map(function (y) { var arr = []; for (var mm = 1; mm <= 12; mm++) { var ym = y + '-' + (mm < 10 ? '0' : '') + mm; arr.push(ym < start || ym > end ? null : M.monthOf(ym)[metric]); } return arr; });
+    out += '<section class="panel c12"><div class="panel-h"><div><h2>Cada mês comparado com o mesmo mês dos anos anteriores</h2><span class="muted">' + esc(MET[metric]) + ' de janeiro a dezembro, uma linha por ano</span></div><div class="seg" role="group" aria-label="Indicador">'
+      + ['rec', 'res', 'desp'].map(function (k) { return '<button type="button" data-act="yoyMetric" data-k="' + k + '" aria-pressed="' + (metric === k) + '">' + MET[k] + '</button>'; }).join('') + '</div></div><div class="panel-b">'
+      + CA.chart('yoyLines', {
+        aria: 'Comparação mensal entre anos', height: 300,
+        labels: CA.MES3, ticks: function (i) { return CA.MES3[i]; },
+        series: yk.map(function (y, k) { return { type: k === yk.length - 1 ? 'area' : 'line', color: colors[k], values: yv[k], width: k === yk.length - 1 ? 3 : 2 }; }),
+        tip: function (i) { return CA.tipMonth(CA.MES[i], yk.map(function (y, k) { var v = yv[k][i]; return [y, v == null ? '—' : brl(v), colors[k]]; }).reverse(), yk.length > 1 && yv[yk.length - 1][i] != null && yv[yk.length - 2][i] ? yk[yk.length - 1] + ' ' + varPct(yv[yk.length - 1][i], yv[yk.length - 2][i]) + ' sobre ' + yk[yk.length - 2] : ''); }
+      }) + '<div class="legend" style="margin-top:8px">' + yk.map(function (y, k) { return '<span><i style="background:' + colors[k] + '"></i>' + y + '</span>'; }).join('') + '</div></div></section>';
     out += '</div>';
     return out;
   };

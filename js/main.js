@@ -73,7 +73,6 @@
       + '<button data-m="priv">' + ic('eye') + (priv ? 'Mostrar valores' : 'Ocultar valores') + '</button>'
       + '<button data-m="refresh">' + ic('refresh') + 'Atualizar a base</button>'
       + '<button data-m="backup">' + ic('down') + 'Baixar cópia da base (JSON)</button>'
-      + '<a href="/legado/" target="_blank" rel="noopener">' + ic('archive') + 'Abrir sistema anterior</a>'
       + '<button data-m="out">' + ic('out') + 'Sair</button>';
     mn.hidden = false; $('btnMenu').setAttribute('aria-expanded', 'true');
     var f = mn.querySelector('button,a'); if (f) f.focus();
