@@ -6,7 +6,7 @@ window.CA = window.CA || {};
     url: 'https://teemhlpfcnhfwveedmym.supabase.co',
     key: 'sb_publishable_DQ9AGXIkznhUj_bg-whWFg_YjYlmMtl',
     ws: 'nova_empresa_main',
-    version: '2.4.0',
+    version: '2.4.1',
     poll: 30000
   };
 
@@ -264,19 +264,21 @@ window.CA = window.CA || {};
     m.querySelector('[data-close]').addEventListener('click', CA.closeModal);
     if (o.mount) o.mount(m);
     var f = m.querySelector('input:not([type=hidden]):not([readonly]), select, textarea, .modal-f .btn.primary');
-    setTimeout(function () { if (f) try { f.focus(); } catch (e) {} }, 30);
+    // foco imediato: um foco atrasado roubava a digitação já iniciada em outro campo
+    if (f) try { f.focus({ preventScroll: true }); } catch (e) {}
     return m;
   };
   CA.drawer = function (o) {
     openLayer();
-    var d = CA.$('drawer');
+    // nova gaveta a cada abertura: elimina ouvintes de cliques de fichas abertas antes
+    var d0 = CA.$('drawer'), d = d0.cloneNode(false); d0.parentNode.replaceChild(d, d0);
     d.innerHTML = '<div class="drawer-h"><h2 id="drawerTitle">' + esc(o.title) + '</h2>' + (o.sub ? '<p>' + esc(o.sub) + '</p>' : '')
       + '<button class="icon-btn" type="button" data-close aria-label="Fechar">' + CA.icon('x') + '</button>'
       + (o.actions ? '<div class="drawer-actions">' + o.actions + '</div>' : '') + '</div><div class="drawer-b">' + (o.body || '') + '</div>';
     d.hidden = false;
     d.querySelector('[data-close]').addEventListener('click', closeLayers);
     if (o.mount) o.mount(d);
-    setTimeout(function () { try { d.querySelector('[data-close]').focus(); } catch (e) {} }, 30);
+    try { d.querySelector('[data-close]').focus({ preventScroll: true }); } catch (e) {}
     return d;
   };
   CA.confirm = function (title, text, okLabel, danger) {
