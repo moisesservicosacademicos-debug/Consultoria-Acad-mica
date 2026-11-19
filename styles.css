@@ -936,3 +936,6 @@ button.kc:hover { background: var(--surface-2); }
 .tl-f .tl-more:not([hidden]) + .tl-last { display: none; }
 .tl-f > span.tl-last { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawer-b > * { flex-shrink: 0; }
+.tl-f .tl-more { font-size: var(--fs-xs); }
+.tl-f .tl-more:hover { text-decoration: underline; }
+.tl-all { padding: 6px 16px 10px; overflow: visible; }

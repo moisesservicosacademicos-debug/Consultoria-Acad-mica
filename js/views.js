@@ -266,7 +266,7 @@
       grp[k] = Object.assign({ n: 1, tits: [e.tit] }, e); list.push(grp[k]);
     });
     list.sort(function (a, b) { return a.d.localeCompare(b.d) || (a.t === 'cob' ? -1 : 1); });
-    var max = 14;
+    var max = 60;
     var cor = { ent: 'var(--info)', ag: 'var(--warn)', mix: 'var(--info)', cob: 'var(--action)' };
     var html = '', sec = '', shown = 0;
     list.forEach(function (e) {
@@ -284,7 +284,7 @@
     if (!list.length) html = '<div class="pn-empty">Nenhum compromisso pela frente.</div>';
     var lastF = M.fin[0];
     return '<section class="panel pa-tl"><div class="panel-h"><h2>Próximos compromissos' + (list.length ? ' <span class="cnt">' + list.length + '</span>' : '') + '</h2>' + lbtn('Agenda', 'go', ' data-go="agenda/prazos"') + '</div><div class="tl">' + html + '</div>'
-      + '<div class="tl-f"><span class="tl-more" hidden></span><span class="tl-last">' + (lastF ? 'Último lançamento: ' + esc(lastF.tipo === 'desp' ? lastF.desc : (lastF.cliente || lastF.desc)) + ', <span class="pv">' + (lastF.tipo === 'desp' ? '− ' + brl(lastF.desp) : brl(lastF.rec)) + '</span> em ' + CA.dshort(lastF.data).replace(' ', '/') : 'Nenhum lançamento ainda') + '</span>' + lbtn('Extrato', 'go', ' data-go="financeiro/extrato"') + '</div></section>';
+      + '<div class="tl-f"><button type="button" class="tl-more lnk" data-act="tlMore" hidden></button><span class="tl-last">' + (lastF ? 'Último lançamento: ' + esc(lastF.tipo === 'desp' ? lastF.desc : (lastF.cliente || lastF.desc)) + ', <span class="pv">' + (lastF.tipo === 'desp' ? '− ' + brl(lastF.desp) : brl(lastF.rec)) + '</span> em ' + CA.dshort(lastF.data).replace(' ', '/') : 'Nenhum lançamento ainda') + '</span>' + lbtn('Extrato', 'go', ' data-go="financeiro/extrato"') + '</div></section>';
   }
   CA.painelDrawer = function (kind) {
     var M = CA.M(), P = periodData(M), per = 'últimos ' + P.nM + ' meses';

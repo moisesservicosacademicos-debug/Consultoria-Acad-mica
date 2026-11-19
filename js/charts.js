@@ -54,7 +54,7 @@
   CA.chart = function (id, cfg) { REG[id] = cfg; return '<div class="chart-box' + (cfg.fill ? ' fill' : '') + '" data-chart="' + esc(id) + '"' + (cfg.fill ? '' : ' style="height:' + (cfg.height || 280) + 'px"') + '></div>'; };
   /* Esconde itens da linha do tempo que não cabem no cartão (nada fica cortado pela metade) */
   CA.fitTimeline = function (root) {
-    (root || document).querySelectorAll('.tl').forEach(function (tl) {
+    (root || document).querySelectorAll('.tl:not(.tl-all)').forEach(function (tl) {
       var kids = [].slice.call(tl.children); kids.forEach(function (k) { k.hidden = false; });
       var lim = tl.getBoundingClientRect().bottom, hid = 0;
       kids.forEach(function (k) { if (k.getBoundingClientRect().bottom > lim + 1) { k.hidden = true; if (k.classList.contains('tl-i')) hid++; } });

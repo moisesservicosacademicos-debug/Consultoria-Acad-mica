@@ -55,6 +55,7 @@
       case 'showPw': var a = findBy(M.access, 'uid', g('data-uid')), sp = document.querySelector('[data-pw="' + CSS.escape(g('data-uid')) + '"]'); if (a && sp) sp.textContent = sp.textContent === a.senha ? '••••••••' : a.senha; break;
       case 'copy': copy(g('data-v')); break;
       case 'evoToggle': var hk = g('data-k'), hd = CA.S.ui.evoHide || (CA.S.ui.evoHide = {}); hd[hk] = !hd[hk]; CA.render(); break;
+      case 'tlMore': showMoreTimeline(); break;
       case 'pnDre': CA.painelDrawer('dre'); break;
       case 'pnTk': CA.painelDrawer('tk'); break;
       case 'heroN': CA.S.ui.heroN = +g('data-k'); CA.render(); break;
@@ -722,6 +723,21 @@
         };
       }
     });
+  }
+
+  /* Compromissos que não couberam no painel */
+  function showMoreTimeline() {
+    var tl = document.querySelector('#view .tl'); if (!tl) return;
+    var html = '', sec = '', secShown = '', n = 0;
+    [].slice.call(tl.children).forEach(function (k) {
+      if (k.classList.contains('tl-d')) { sec = k.textContent; return; }
+      if (!k.hidden) return;
+      if (sec !== secShown) { html += '<div class="tl-d">' + CA.esc(sec) + '</div>'; secShown = sec; }
+      var c = k.cloneNode(true); c.hidden = false; html += c.outerHTML; n++;
+    });
+    if (!n) return;
+    CA.drawer({ title: n === 1 ? 'Mais 1 compromisso' : 'Mais ' + n + ' compromissos', sub: 'Os que não couberam no painel', body: '<section class="panel"><div class="tl tl-all">' + html + '</div></section>',
+      mount: function (d) { d.querySelector('.tl-all').addEventListener('click', function (e) { var el = e.target.closest('[data-act]'); if (el) CA.action(el.getAttribute('data-act'), el); }); } });
   }
 
   /* ================= DESPESAS ================= */
