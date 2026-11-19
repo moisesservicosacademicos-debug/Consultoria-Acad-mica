@@ -99,15 +99,8 @@
   }
   /* Painel: últimos 12 meses com detalhe por mês */
   var HERO_G = [['Ferramentas e sistemas', 'var(--st-g1)'], ['Operacional', 'var(--st-g2)'], ['Impostos e taxas', 'var(--st-g3)'], ['Pró-labore', 'var(--st-g4)'], ['Marketing', 'var(--st-g5)'], ['Outros', 'var(--st-g6)'], ['Sem grupo', 'var(--st-g7)']];
-  function chart12(M) {
-    var nM = CA.S.ui.heroN || 6, end = M.hoje.slice(0, 7), sr = CA.monthSeries(M, CA.ymAdd(end, -(nM - 1)), end);
-    var byG = {}; M.fin.forEach(function (f) { if (f.tipo !== 'desp') return; var g = HERO_G.some(function (x) { return x[0] === f.grupo; }) ? f.grupo : 'Sem grupo'; var o = byG[f.ym] || (byG[f.ym] = {}); o[g] = (o[g] || 0) + f.desp; });
-    sr.forEach(function (m) { m.g = byG[m.ym] || {}; });
-    var used = HERO_G.filter(function (g) { return sr.some(function (m) { return m.g[g[0]] > 0; }); });
-    var sum = function (k) { return sr.reduce(function (t, m) { return t + m[k]; }, 0); }, rec = sum('rec'), desp = sum('desp'), res = sum('res');
-    var closed = sr.slice(0, -1), best = closed.reduce(function (b, m) { return m.rec > b.rec ? m : b; }, closed[0] || sr[0]);
-    var head = '<div class="hero-h"><div><h2>Resultado mês a mês</h2><p class="muted">Receita (linha), lucro líquido e despesas por grupo (colunas). Toque numa coluna para ver o detalhe.</p></div>'
-      + '<div class="seg hero-seg" role="group" aria-label="Período">' + [[6, '6 meses'], [12, '12 meses']].map(function (o) { return '<button type="button" data-act="heroN" data-k="' + o[0] + '" aria-pressed="' + (nM === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
+  function chart12(M, sr, used) {
+    var end = M.hoje.slice(0, 7), nM = sr.length;
     var leg = '<div class="hero-leg"><span><i class="sq" style="background:var(--st-lucro)"></i>Lucro líquido</span>' + used.map(function (g) { return '<span><i class="sq" style="background:' + g[1] + '"></i>' + esc(g[0]) + '</span>'; }).join('') + '<span><i class="ln-r"></i>Receita</span></div>';
     var tip = function (i) {
       var m = sr[i], rows = [['Receita', '<b>' + brl(m.rec) + '</b>', 'var(--st-line)']];
@@ -116,14 +109,66 @@
       var prev = sr[i - 1];
       return CA.tipMonth(CA.ymLabel(m.ym) + (m.ym === end ? ' · em andamento' : ''), rows, 'Margem ' + (m.rec ? Math.round(m.res / m.rec * 100) + '%' : '—') + (prev && prev.rec ? ' · receita ' + varPct(m.rec, prev.rec) + ' sobre ' + CA.MES3[+prev.ym.slice(5, 7) - 1] : ''));
     };
-    var lbl = nM + ' meses';
-    var ins = '<div class="hero-ins2"><div class="hi-h"><span class="hi-p">' + ic('chart') + 'Destaques</span></div><div class="hi-g">'
-      + '<div><i></i><p>Receita nos últimos ' + lbl + ': <b class="pv">' + brl(rec) + '</b></p></div>'
-      + '<div><i></i><p>Margem líquida de <b>' + (rec ? Math.round(res / rec * 100) : 0) + '%</b> no período, com lucro de <b class="pv">' + brl(res) + '</b></p></div>'
-      + '<div><i></i><p>Melhor mês: <b>' + esc(CA.ymLabel(best.ym).toLowerCase()) + '</b>, com <b class="pv">' + brl(best.rec) + '</b></p></div>'
-      + '<div><i></i><p>Despesas de <b class="pv">' + brl(desp) + '</b>, ou <b>' + (rec ? (Math.round(desp / rec * 1000) / 10).toString().replace('.', ',') : 0) + '%</b> da receita</p></div></div></div>';
-    return head + CA.chart('painel12', { kind: 'hero', months: sr, groups: used, partialLast: true, height: 340, tip: tip,
-      aria: 'Receita, despesas por grupo e lucro líquido mês a mês', tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1] + (nM === 6 ? '/' + sr[i].ym.slice(2, 4) : ''); } }) + '<div class="hero-legm">' + leg + '</div>' + ins;
+    return CA.chart('painel12', { kind: 'hero', months: sr, groups: used, partialLast: true, height: 330, tip: tip,
+      aria: 'Receita, despesas por grupo e lucro líquido mês a mês', tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1] + (nM === 6 ? '/' + sr[i].ym.slice(2, 4) : ''); } }) + '<div class="hero-legm">' + leg + '</div>';
+  }
+  function pctTxt(v) { return (Math.round(v * 10) / 10).toString().replace('.', ',') + '%'; }
+  function dashResultado(M) {
+    var nM = CA.S.ui.heroN || 6, end = M.hoje.slice(0, 7), sr = CA.monthSeries(M, CA.ymAdd(end, -(nM - 1)), end), pv = CA.monthSeries(M, CA.ymAdd(end, -(2 * nM - 1)), CA.ymAdd(end, -nM));
+    var byG = {}; M.fin.forEach(function (f) { if (f.tipo !== 'desp') return; var g = HERO_G.some(function (x) { return x[0] === f.grupo; }) ? f.grupo : 'Sem grupo'; var o = byG[f.ym] || (byG[f.ym] = {}); o[g] = (o[g] || 0) + f.desp; });
+    sr.forEach(function (m) { m.g = byG[m.ym] || {}; });
+    var used = HERO_G.filter(function (g) { return sr.some(function (m) { return m.g[g[0]] > 0; }); });
+    var sum = function (a, k) { return a.reduce(function (t, m) { return t + (m[k] || 0); }, 0); };
+    var rec = sum(sr, 'rec'), desp = sum(sr, 'desp'), res = sum(sr, 'res'), recP = sum(pv, 'rec'), pl = sum(sr, 'pl');
+    var mens = sum(sr, 'mens'), ev = sum(sr, 'event'), ex = sum(sr, 'extra'), ou = sum(sr, 'outro');
+    var gTot = {}; used.forEach(function (g) { gTot[g[0]] = sr.reduce(function (t, m) { return t + (m.g[g[0]] || 0); }, 0); });
+    var closed = sr.slice(0, -1), best = closed.reduce(function (b, m) { return m.rec > b.rec ? m : b; }, closed[0] || sr[0]);
+    var media = closed.length ? sum(closed, 'rec') / closed.length : 0, cur = sr[sr.length - 1];
+    var marg = rec ? res / rec * 100 : null, opx = rec ? desp / rec * 100 : null, recor = rec ? mens / rec * 100 : null, cresc = recP ? (rec - recP) / recP * 100 : null;
+    var per = 'nos últimos ' + nM + ' meses';
+    var out = '<div class="dash-h c12"><div><h2>Resultado da consultoria</h2><p class="muted">Receita, despesas e lucro líquido ' + per + ', com o mês atual em andamento.</p></div>'
+      + '<div class="seg hero-seg" role="group" aria-label="Período">' + [[6, '6 meses'], [12, '12 meses']].map(function (o) { return '<button type="button" data-act="heroN" data-k="' + o[0] + '" aria-pressed="' + (nM === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
+    out += '<div class="dash c12"><div class="dash-main">';
+    // medidores
+    out += '<section class="panel gauges">' + CA.gauge(marg, 'Margem líquida', 'lucro de <span class="pv">' + brl(res) + '</span>')
+      + CA.gauge(opx, 'Despesas sobre a receita', '<span class="pv">' + brl(desp) + '</span> no período')
+      + CA.gauge(recor, 'Receita recorrente', 'vinda de mensalidades')
+      + CA.gauge(cresc, 'Crescimento da receita', recP ? 'sobre os ' + nM + ' meses anteriores' : 'sem período anterior', 'signed') + '</section>';
+    // gráfico principal
+    out += '<section class="panel hero-p"><div class="panel-h"><h2>Receita, despesas e lucro por mês</h2>' + lbtn('Ver evolução desde o início', 'go', ' data-go="financeiro/evolucao"') + '</div><div class="panel-b">' + chart12(M, sr, used) + '</div></section>';
+    // DRE
+    var row = function (lbl, v, cls, pctOf) { return '<tr class="' + (cls || '') + '"><td>' + lbl + '</td><td class="r num pv">' + (cls && cls.indexOf('neg') >= 0 && v ? '− ' : '') + brl(v) + '</td><td class="r num">' + (rec ? pctTxt(v / rec * 100) : '—') + '</td></tr>'; };
+    var dre = '<table class="dre"><thead><tr><th>Demonstrativo ' + per.replace('nos ', 'dos ') + '</th><th class="r">Valor</th><th class="r">% receita</th></tr></thead><tbody>'
+      + row('Receita bruta', rec, 'tot')
+      + row('Mensalidades', mens, 'sub') + row('Serviços eventuais', ev, 'sub') + (ex ? row('Extras de mensalistas', ex, 'sub') : '') + (ou ? row('Outros recebimentos', ou, 'sub') : '')
+      + row('Despesas', desp, 'tot neg')
+      + (used.length ? used.map(function (g) { return row(esc(g[0]), gTot[g[0]], 'sub'); }).join('') : '<tr class="sub"><td colspan="3" class="muted">Nenhuma despesa lançada no período</td></tr>')
+      + (pl > 0 ? row('Lucro antes do pró-labore', res + pl, 'tot') : '')
+      + row('Lucro líquido', res, 'net') + '</tbody></table>';
+    out += '<div class="dash-row"><section class="panel dre-p"><div class="panel-b">' + dre + '</div></section>';
+    // margem mês a mês
+    var mg = sr.map(function (m) { return m.rec ? Math.round(m.res / m.rec * 1000) / 10 : null; }), mgOk = mg.filter(function (v) { return v != null; });
+    var mMed = marg != null ? Math.round(marg * 10) / 10 : null;
+    out += '<section class="panel"><div class="panel-h"><h2>Margem líquida por mês</h2></div><div class="panel-b">' + (mgOk.length ? CA.chart('painelMarg', {
+      aria: 'Margem líquida mês a mês', height: 236, partialLast: true, yfmt: function (v) { return Math.round(v) + '%'; },
+      labels: sr.map(function (m) { return m.ym; }), ticks: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1]; },
+      hlines: mMed != null ? [{ v: mMed, label: 'Margem do período ' + pctTxt(mMed) }] : [],
+      series: [{ type: 'area', color: 'var(--st-lucro)', values: mg }],
+      tip: function (i) { var m = sr[i]; return CA.tipMonth(CA.ymLabel(m.ym), [['Margem líquida', '<b>' + (mg[i] == null ? '—' : pctTxt(mg[i])) + '</b>', 'var(--st-lucro)'], ['Receita', brl(m.rec), 'var(--st-line)'], ['Despesas', brl(m.desp), 'var(--out)']], m.ym === end ? 'Mês em andamento' : ''); }
+    }) : empty('Sem receita no período')) + '</div></section></div>';
+    out += '</div>';
+    // leituras
+    var maiorG = used.slice().sort(function (a, b) { return gTot[b[0]] - gTot[a[0]]; })[0];
+    var tk = [];
+    tk.push('Receita de <b class="pv">' + brl(rec) + '</b> ' + per + (recP ? ', ' + (rec >= recP ? 'alta' : 'queda') + ' de <b>' + pctTxt(Math.abs(cresc)) + '</b> sobre os ' + nM + ' meses anteriores.' : '.'));
+    tk.push('De cada R$ 100,00 recebidos, <b>' + brl(rec ? res / rec * 100 : 0) + '</b> viraram lucro líquido.');
+    if (recor != null) tk.push('Mensalidades respondem por <b>' + pctTxt(recor) + '</b> da receita' + (ev ? '; serviços eventuais, por <b>' + pctTxt(ev / rec * 100) + '</b>.' : '.'));
+    if (maiorG) tk.push('Maior despesa: <b>' + esc(maiorG[0]) + '</b>, com <b class="pv">' + brl(gTot[maiorG[0]]) + '</b> (' + pctTxt(gTot[maiorG[0]] / desp * 100) + ' das despesas).');
+    if (best && best.rec) tk.push('Melhor mês: <b>' + esc(CA.ymLabel(best.ym).toLowerCase()) + '</b>, com <b class="pv">' + brl(best.rec) + '</b>.');
+    tk.push(CA.MES[+cur.ym.slice(5, 7) - 1] + ' até agora: <b class="pv">' + brl(cur.rec) + '</b> recebidos' + (media ? ', <b>' + pctTxt(cur.rec / media * 100) + '</b> da média mensal.' : '.'));
+    out += '<aside class="takeaways"><h3>Leituras do período</h3><ul>' + tk.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>'
+      + (opx != null && opx < 10 ? '<p class="tk-note">Despesas abaixo de 10% da receita costumam indicar custos não lançados (impostos, ferramentas, pró-labore).</p>' : '') + '</aside>';
+    return out + '</div>';
   }
   function mix(m) {
     var tot = m.mens + m.event + m.extra + m.outro;
@@ -176,8 +221,7 @@
     out += '<div class="panel c3"><button class="kpi" data-go="servicos/receber"><span class="lb"><span class="dot" style="background:var(--warn)"></span>A receber de serviços</span><span class="vl num pv">' + brl(M.aReceber) + '</span><span class="ft">' + M.services.filter(function (s) { return s.saldo > 0; }).length + ' serviços com saldo</span></button></div>';
     out += '<div class="panel c3"><button class="kpi" data-go="mensalidades/situacao"><span class="lb"><span class="dot" style="background:var(--out)"></span>Mensalidades em atraso</span><span class="vl num pv ' + (M.atrasados.length ? 'out' : '') + '">' + M.atrasados.length + (M.atrasados.length ? ' · ' + brl(atrasoVal) : '') + '</span><span class="ft">' + (M.atrasados.length ? 'toque para ver quem' : 'ninguém em atraso') + '</span></button></div>';
 
-    out += '<section class="panel c8 hero-p"><div class="panel-b">' + chart12(M) + '<div class="hero-f">' + lbtn('Ver evolução desde o início', 'go', ' data-go="financeiro/evolucao"') + '</div></div></section>';
-    out += '<section class="panel c4"><div class="panel-h"><h2>De onde veio a receita</h2><span class="muted">' + esc(CA.MES[+nowYm.slice(5, 7) - 1]) + '</span></div><div class="panel-b">' + mix(M.now) + '</div></section>';
+    out += dashResultado(M);
 
     var pz = M.prazos.slice(0, 6);
     out += '<section class="panel c6"><div class="panel-h"><h2>Próximas entregas</h2>' + lbtn('Ver todas', 'go', ' data-go="agenda/prazos"') + '</div><div class="panel-b"><div class="rows">' + (pz.length ? pz.map(prazoRow).join('') : empty('Nenhum serviço em andamento', 'Quando um serviço for lançado, a entrega aparece aqui.')) + '</div></div></section>';

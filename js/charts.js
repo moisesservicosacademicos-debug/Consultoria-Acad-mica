@@ -8,7 +8,7 @@
   /* Série mensal contínua (meses sem movimento entram com zero) */
   CA.monthSeries = function (M, from, to) {
     var out = [], ym = from;
-    while (ym <= to) { var m = M.monthOf(ym); out.push({ ym: ym, rec: m.rec, desp: m.desp, res: m.res, mens: m.mens, event: m.event, extra: m.extra, outro: m.outro }); ym = CA.ymAdd(ym, 1); }
+    while (ym <= to) { var m = M.monthOf(ym); out.push({ ym: ym, rec: m.rec, desp: m.desp, res: m.res, pl: m.pl || 0, mens: m.mens, event: m.event, extra: m.extra, outro: m.outro }); ym = CA.ymAdd(ym, 1); }
     return out;
   };
   CA.movAvg = function (arr, n) { return arr.map(function (_, i) { if (i < n - 1) return null; var s = 0; for (var j = i - n + 1; j <= i; j++) s += arr[j]; return s / n; }); };
@@ -20,7 +20,7 @@
   }
   function kfmt(v) { return CA.brl(v); }
   CA.kfmt = kfmt;
-  function axisW(nk, mobile) { var w = Math.max(CA.brl(nk.hi).length, CA.brl(nk.lo).length); return Math.round(w * (mobile ? 5.6 : 6.1)) + 12; }
+  function axisW(nk, mobile, fmt) { fmt = fmt || CA.brl; var w = Math.max(fmt(nk.hi).length, fmt(nk.lo).length); return Math.round(w * (mobile ? 5.6 : 6.1)) + 12; }
   /* Curva monotônica (não passa do ponto, sem "ondas" falsas) */
   function smooth(pts) {
     var n = pts.length; if (n < 2) return pts.length ? 'M' + pts[0][0] + ',' + pts[0][1] : '';
@@ -66,11 +66,11 @@
     var hasBar = cfg.series.some(function (s) { return s.type === 'bar' && !s.hidden; });
     var mx = Math.max.apply(null, all.concat([0])), mn = Math.min.apply(null, all.concat([0]));
     var nk = nice(mx || 1, mn < 0 ? mn : 0);
-    L = axisW(nk, mobile);
+    var fmt = cfg.yfmt || kfmt; L = axisW(nk, mobile, fmt);
     var y = function (v) { return T + (H - T - B) * (1 - (v - nk.lo) / ((nk.hi - nk.lo) || 1)); };
     var step = (W - L - R) / n, cx = function (i) { return L + step * i + step / 2; };
     var s = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || 'Gráfico') + '">';
-    for (var v = nk.lo; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (Math.abs(v) < 1e-6 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + kfmt(v) + '</text>';
+    for (var v = nk.lo; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (Math.abs(v) < 1e-6 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmt(v)) + '</text>';
     // faixas de ano
     if (cfg.yearBands) {
       for (var i = 0; i < n; i++) if (i > 0 && cfg.labels[i].slice(5, 7) === '01') s += '<line class="yb" x1="' + (L + step * i) + '" x2="' + (L + step * i) + '" y1="' + T + '" y2="' + (H - B) + '"/>';
@@ -93,6 +93,7 @@
       s += '<path class="ln' + (ser.type === 'dash' ? ' dash' : '') + '" d="' + d + '" style="stroke:' + ser.color + ';stroke-width:' + (ser.width || (ser.type === 'dash' ? 2 : 2.5)) + '"/>';
       if (ser.endDot !== false && ser.type !== 'dash') { var lp = pts[pts.length - 1]; s += '<circle class="end" cx="' + lp[0] + '" cy="' + lp[1] + '" r="4.5" style="stroke:' + ser.color + '"/>'; }
     });
+    (cfg.hlines || []).forEach(function (hl) { s += '<line class="hl" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(hl.v) + '" y2="' + y(hl.v) + '"/><text class="hlt" x="' + (L + 6) + '" y="' + (y(hl.v) + 15) + '" text-anchor="start">' + esc(hl.label) + '</text>'; });
     // marcos
     (cfg.markers || []).forEach(function (mk) {
       var mxp = cx(mk.i), myp = y(mk.v);
@@ -133,7 +134,7 @@
     var ms = cfg.months, n = ms.length, groups = cfg.groups;
     var mx = 0; ms.forEach(function (m) { mx = Math.max(mx, m.rec, m.desp); });
     var nk = nice((mx || 1) * 1.08, 0);
-    var callW = mobile ? 0 : 150, L = axisW(nk, mobile) + (mobile ? 0 : 18), R = (mobile ? 6 : 10) + callW, T = 38, B = 34;
+    var callW = mobile ? 0 : 150, L = axisW(nk, mobile) + (mobile ? 0 : 18), R = (mobile ? 6 : 10) + callW, T = 30, B = 34;
     var y = function (v) { return T + (H - T - B) * (1 - v / (nk.hi || 1)); };
     var step = (W - L - R) / n, cx = function (i) { return L + step * i + step / 2; };
     var gw = Math.min(step * (n > 8 ? .6 : .7), 100), lx = [], best = 0;
@@ -198,6 +199,17 @@
     svg.addEventListener('pointerdown', function (e) { show(e.clientX); });
     svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hide(); });
   }
+
+  /* Medidor em arco (270°) */
+  CA.gauge = function (pct, label, sub, tone) {
+    var p = Math.max(0, Math.min(100, pct == null ? 0 : pct)), r = 42, c = 2 * Math.PI * r, arc = c * .75;
+    var txt = pct == null ? '—' : (tone === 'signed' ? (pct >= 0 ? '+' : '−') + Math.abs(Math.round(pct)) : Math.round(pct)) + (pct == null ? '' : '%');
+    var p2 = tone === 'signed' ? Math.min(100, Math.abs(pct || 0)) : p;
+    return '<div class="gauge' + (tone === 'signed' && pct < 0 ? ' neg' : '') + '"><div class="g-w"><svg viewBox="0 0 100 100" aria-hidden="true"><g transform="rotate(135 50 50)">'
+      + '<circle class="g-tr" cx="50" cy="50" r="' + r + '" stroke-dasharray="' + arc + ' ' + c + '"/>'
+      + '<circle class="g-v" cx="50" cy="50" r="' + r + '" stroke-dasharray="' + (arc * p2 / 100) + ' ' + c + '"/></g></svg>'
+      + '<b class="num">' + txt + '</b></div><span class="g-l">' + esc(label) + '</span>' + (sub ? '<span class="g-s">' + sub + '</span>' : '') + '</div>';
+  };
 
   /* Quadro de detalhe padrão de um mês */
   CA.tipMonth = function (title, rows, foot) {
