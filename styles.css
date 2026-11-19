@@ -13,6 +13,8 @@
   --surface-2: #F1F1F6;
   --line: #E3E4EE;
   --line-strong: #CDCFE0;
+  --grid: #ECEDF3;
+  --grid-z: #D9DBE7;
   --ink: #111439;
   --ink-2: #3B3F66;
   --muted: #6A6E92;
@@ -54,6 +56,8 @@
   --surface-2: #1C2048;
   --line: #2A2F63;
   --line-strong: #3A4080;
+  --grid: rgba(255, 255, 255, .045);
+  --grid-z: rgba(255, 255, 255, .11);
   --ink: #F1F2FF;
   --ink-2: #D2D5F5;
   --muted: #A3A8D6;
@@ -274,7 +278,7 @@ button.kpi:hover { background: var(--surface-2); }
 .chart { width: 100%; height: auto; display: block; stroke: none; }
 .chart text { stroke: none; }
 .chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
-.chart .gl { stroke: var(--line); stroke-width: 1; }
+.chart .gl { stroke: var(--grid); stroke-width: 1; }
 .chart .br { fill: var(--in); }
 .chart .bd { fill: var(--out); opacity: .85; }
 .chart .ln { stroke: var(--action); stroke-width: 2.5; fill: none; }
@@ -477,9 +481,9 @@ button.row:hover { background: var(--surface-2); }
 .chart-box { position: relative; width: 100%; touch-action: pan-y; }
 .chart-box svg { display: block; overflow: visible; width: auto; height: auto; stroke: none; fill: none; }
 .chart-box svg text { stroke: none; }
-.chart-box .gl { stroke: var(--line); stroke-width: 1; }
-.chart-box .gl.z { stroke: var(--line-strong); }
-.chart-box .yb { stroke: var(--line-strong); stroke-dasharray: 3 4; }
+.chart-box .gl { stroke: var(--grid); stroke-width: 1; }
+.chart-box .gl.z { stroke: var(--grid-z); }
+.chart-box .yb { stroke: var(--grid-z); stroke-dasharray: 3 4; }
 .chart-box .yt, .chart-box .xt { fill: var(--muted); font-size: 11px; font-weight: 600; }
 .chart-box .ln { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .chart-box .ln.dash { stroke-dasharray: 6 5; }
