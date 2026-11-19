@@ -109,7 +109,7 @@
       var prev = sr[i - 1];
       return CA.tipMonth(CA.ymLabel(m.ym) + (m.ym === end ? ' · em andamento' : ''), rows, 'Margem ' + (m.rec ? Math.round(m.res / m.rec * 100) + '%' : '—') + (prev && prev.rec ? ' · receita ' + varPct(m.rec, prev.rec) + ' sobre ' + CA.MES3[+prev.ym.slice(5, 7) - 1] : ''));
     };
-    return CA.chart('painel12', { kind: 'hero', months: sr, groups: used, partialLast: true, height: 330, tip: tip,
+    return CA.chart('painel12', { kind: 'hero', months: sr, groups: used, partialLast: true, height: 262, tip: tip,
       aria: 'Receita, despesas por grupo e lucro líquido mês a mês', tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1] + (nM === 6 ? '/' + sr[i].ym.slice(2, 4) : ''); } }) + '<div class="hero-legm">' + leg + '</div>';
   }
   function pctTxt(v) { return (Math.round(v * 10) / 10).toString().replace('.', ',') + '%'; }
@@ -150,7 +150,7 @@
     var mg = sr.map(function (m) { return m.rec ? Math.round(m.res / m.rec * 1000) / 10 : null; }), mgOk = mg.filter(function (v) { return v != null; });
     var mMed = marg != null ? Math.round(marg * 10) / 10 : null;
     out += '<section class="panel"><div class="panel-h"><h2>Margem líquida por mês</h2></div><div class="panel-b">' + (mgOk.length ? CA.chart('painelMarg', {
-      aria: 'Margem líquida mês a mês', height: 236, partialLast: true, yfmt: function (v) { return Math.round(v) + '%'; },
+      aria: 'Margem líquida mês a mês', height: 178, partialLast: true, yfmt: function (v) { return Math.round(v) + '%'; },
       labels: sr.map(function (m) { return m.ym; }), ticks: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1]; },
       hlines: mMed != null ? [{ v: mMed, label: 'Margem do período ' + pctTxt(mMed) }] : [],
       series: [{ type: 'area', color: 'var(--st-lucro)', values: mg }],
@@ -209,27 +209,29 @@
     var nowYm = M.hoje.slice(0, 7);
     var out = head(saud + ', Moisés', esc(CA.ymLabel(nowYm)) + ' · ' + M.ativos.length + ' mensalistas ativos · ' + M.services.filter(function (s) { return !s.done; }).length + ' serviços em andamento', btn(ic('refresh') + 'Atualizar', 'refresh'));
     out += '<div class="grid">';
-    out += '<section class="ledger" aria-label="Resultado acumulado">'
-      + '<div><div class="lb">Receita acumulada</div><div class="vl num pv">' + brl0(M.acc.rec) + '</div><div class="ft">desde ' + esc(CA.ymShort(M.acc.desde).toLowerCase()) + ' até hoje</div></div>'
-      + '<div><div class="lb">Despesas acumuladas</div><div class="vl sm num pv">' + brl0(M.acc.desp) + '</div><div class="ft">' + (M.acc.rec ? Math.round(M.acc.desp / M.acc.rec * 100) : 0) + '% da receita</div></div>'
-      + '<div><div class="lb">Lucro líquido acumulado</div><div class="vl sm num pv ' + (M.acc.res >= 0 ? 'pos' : 'neg') + '">' + brl0(M.acc.res) + '</div><div class="ft">margem de ' + (M.acc.rec ? Math.round(M.acc.res / M.acc.rec * 100) : 0) + '%</div></div>'
-      + '<div><div class="lb">Resultado de ' + esc(CA.MES[+nowYm.slice(5, 7) - 1].toLowerCase()) + '</div><div class="vl sm num pv gold">' + brl0(M.now.res) + '</div><div class="ft">' + brl0(M.now.rec) + ' recebidos, ' + brl0(M.now.desp) + ' de despesas</div></div>'
-      + '</section>';
-    var atrasoVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0);
-    out += '<div class="panel c3"><button class="kpi" data-go="financeiro/resumo"><span class="lb"><span class="dot" style="background:var(--in)"></span>Recebido no mês</span><span class="vl num pv">' + brl(M.now.rec) + '</span><span class="ft">' + (delta(M.now.rec, M.prev.rec) || 'primeiro mês com dados') + '</span></button></div>';
-    out += '<div class="panel c3"><button class="kpi" data-go="mensalidades/situacao"><span class="lb"><span class="dot" style="background:var(--action)"></span>Mensalidades previstas</span><span class="vl num pv">' + brl(M.mrr) + '</span><span class="ft">' + M.ativos.length + ' mensalistas ativos por mês</span></button></div>';
-    out += '<div class="panel c3"><button class="kpi" data-go="servicos/receber"><span class="lb"><span class="dot" style="background:var(--warn)"></span>A receber de serviços</span><span class="vl num pv">' + brl(M.aReceber) + '</span><span class="ft">' + M.services.filter(function (s) { return s.saldo > 0; }).length + ' serviços com saldo</span></button></div>';
-    out += '<div class="panel c3"><button class="kpi" data-go="mensalidades/situacao"><span class="lb"><span class="dot" style="background:var(--out)"></span>Mensalidades em atraso</span><span class="vl num pv ' + (M.atrasados.length ? 'out' : '') + '">' + M.atrasados.length + (M.atrasados.length ? ' · ' + brl(atrasoVal) : '') + '</span><span class="ft">' + (M.atrasados.length ? 'toque para ver quem' : 'ninguém em atraso') + '</span></button></div>';
+    var atrasoVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0), mesNome = CA.MES[+nowYm.slice(5, 7) - 1].toLowerCase();
+    var cell = function (lb, vl, ft, cls, go, dot) { var tag = go ? 'button type="button" data-go="' + go + '"' : 'div'; return '<' + tag + ' class="kc' + (cls ? ' ' + cls : '') + '"><span class="lb">' + (dot ? '<i style="background:' + dot + '"></i>' : '') + lb + '</span><b class="num pv">' + vl + '</b><small>' + ft + '</small></' + (go ? 'button' : 'div') + '>'; };
+    out += '<section class="kstrip c12" aria-label="Indicadores"><div class="ks-acc">'
+      + cell('Receita acumulada', brl(M.acc.rec), 'desde ' + esc(CA.ymShort(M.acc.desde).toLowerCase()))
+      + cell('Despesas acumuladas', brl(M.acc.desp), (M.acc.rec ? Math.round(M.acc.desp / M.acc.rec * 100) : 0) + '% da receita')
+      + cell('Lucro líquido acumulado', brl(M.acc.res), 'margem de ' + (M.acc.rec ? Math.round(M.acc.res / M.acc.rec * 100) : 0) + '%', M.acc.res >= 0 ? 'pos' : 'neg')
+      + cell('Resultado de ' + esc(mesNome), brl(M.now.res), brl(M.now.desp) + ' de despesas', 'gold')
+      + '</div><div class="ks-mes">'
+      + cell('Recebido no mês', brl(M.now.rec), delta(M.now.rec, M.prev.rec) || 'primeiro mês com dados', '', 'financeiro/resumo', 'var(--in)')
+      + cell('Mensalidades previstas', brl(M.mrr), M.ativos.length + ' mensalistas ativos', '', 'mensalidades/situacao', 'var(--action)')
+      + cell('A receber de serviços', brl(M.aReceber), M.services.filter(function (s) { return s.saldo > 0; }).length + ' serviços com saldo', '', 'servicos/receber', 'var(--warn)')
+      + cell('Mensalidades em atraso', M.atrasados.length + (M.atrasados.length ? ' · ' + brl(atrasoVal) : ''), M.atrasados.length ? 'toque para ver quem' : 'nenhuma em atraso', M.atrasados.length ? 'out' : '', 'mensalidades/situacao', 'var(--out)')
+      + '</div></section>';
 
     out += dashResultado(M);
 
-    var pz = M.prazos.slice(0, 6);
-    out += '<section class="panel c6"><div class="panel-h"><h2>Próximas entregas</h2>' + lbtn('Ver todas', 'go', ' data-go="agenda/prazos"') + '</div><div class="panel-b"><div class="rows">' + (pz.length ? pz.map(prazoRow).join('') : empty('Nenhum serviço em andamento', 'Quando um serviço for lançado, a entrega aparece aqui.')) + '</div></div></section>';
-    var mc = M.rcl.filter(function (x) { return x.faixa === 'atraso' || x.faixa === 'breve'; }).slice(0, 6);
-    out += '<section class="panel c6"><div class="panel-h"><h2>Mensalidades a cobrar</h2>' + lbtn('Ver mensalistas', 'go', ' data-go="mensalidades/situacao"') + '</div><div class="panel-b"><div class="rows">' + (mc.length ? mc.map(mensRow).join('') : empty('Nada a cobrar nos próximos 7 dias')) + '</div></div></section>';
+    var pz = M.prazos.slice(0, 5);
+    out += '<section class="panel c6 lst"><div class="panel-h"><h2>Próximas entregas</h2>' + lbtn('Ver todas', 'go', ' data-go="agenda/prazos"') + '</div><div class="panel-b"><div class="rows">' + (pz.length ? pz.map(prazoRow).join('') : empty('Nenhum serviço em andamento', 'Quando um serviço for lançado, a entrega aparece aqui.')) + '</div></div></section>';
+    var mc = M.rcl.filter(function (x) { return x.faixa === 'atraso' || x.faixa === 'breve'; }).slice(0, 5);
+    out += '<section class="panel c6 lst"><div class="panel-h"><h2>Mensalidades a cobrar</h2>' + lbtn('Ver mensalistas', 'go', ' data-go="mensalidades/situacao"') + '</div><div class="panel-b"><div class="rows">' + (mc.length ? mc.map(mensRow).join('') : empty('Nada a cobrar nos próximos 7 dias')) + '</div></div></section>';
     var ag = M.schedules.filter(function (s) { return s.open; }).slice(0, 5);
-    out += '<section class="panel c6"><div class="panel-h"><h2>Agenda</h2>' + lbtn('Abrir agenda', 'go', ' data-go="agenda/agendamentos"') + '</div><div class="panel-b"><div class="rows">' + (ag.length ? ag.map(schRow).join('') : empty('Sem agendamentos pendentes')) + '</div></div></section>';
-    out += '<section class="panel c6"><div class="panel-h"><h2>Últimos lançamentos</h2>' + lbtn('Ver extrato', 'go', ' data-go="financeiro/extrato"') + '</div><div class="panel-b"><div class="rows">' + (M.fin.length ? M.fin.slice(0, 6).map(finRow).join('') : empty('Nenhum lançamento ainda')) + '</div></div></section>';
+    out += '<section class="panel c6 lst"><div class="panel-h"><h2>Agenda</h2>' + lbtn('Abrir agenda', 'go', ' data-go="agenda/agendamentos"') + '</div><div class="panel-b"><div class="rows">' + (ag.length ? ag.map(schRow).join('') : empty('Sem agendamentos pendentes')) + '</div></div></section>';
+    out += '<section class="panel c6 lst"><div class="panel-h"><h2>Últimos lançamentos</h2>' + lbtn('Ver extrato', 'go', ' data-go="financeiro/extrato"') + '</div><div class="panel-b"><div class="rows">' + (M.fin.length ? M.fin.slice(0, 5).map(finRow).join('') : empty('Nenhum lançamento ainda')) + '</div></div></section>';
     out += '</div>';
     return out;
   };

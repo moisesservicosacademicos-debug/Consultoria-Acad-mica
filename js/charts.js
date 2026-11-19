@@ -208,7 +208,7 @@
     return '<div class="gauge' + (tone === 'signed' && pct < 0 ? ' neg' : '') + '"><div class="g-w"><svg viewBox="0 0 100 100" aria-hidden="true"><g transform="rotate(135 50 50)">'
       + '<circle class="g-tr" cx="50" cy="50" r="' + r + '" stroke-dasharray="' + arc + ' ' + c + '"/>'
       + '<circle class="g-v" cx="50" cy="50" r="' + r + '" stroke-dasharray="' + (arc * p2 / 100) + ' ' + c + '"/></g></svg>'
-      + '<b class="num">' + txt + '</b></div><span class="g-l">' + esc(label) + '</span>' + (sub ? '<span class="g-s">' + sub + '</span>' : '') + '</div>';
+      + '<b class="num">' + txt + '</b></div><div class="g-txt"><span class="g-l">' + esc(label) + '</span>' + (sub ? '<span class="g-s">' + sub + '</span>' : '') + '</div></div>';
   };
 
   /* Quadro de detalhe padrão de um mês */

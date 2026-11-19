@@ -6,7 +6,7 @@ window.CA = window.CA || {};
     url: 'https://teemhlpfcnhfwveedmym.supabase.co',
     key: 'sb_publishable_DQ9AGXIkznhUj_bg-whWFg_YjYlmMtl',
     ws: 'nova_empresa_main',
-    version: '2.4.1',
+    version: '2.5.0',
     poll: 30000
   };
 
