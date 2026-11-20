@@ -32,9 +32,14 @@
   CA.render = function (scrollTop) {
     if (!CA.S.data) return;
     var M = CA.M(), R = CA.S.route, area = AREAS.filter(function (a) { return a.id === R.area; })[0], b = badges(M);
+    var AC = { painel: 'var(--c-blue)', clientes: 'var(--c-green)', mensalidades: 'var(--c-orange)', servicos: 'var(--c-yellow)', financeiro: 'var(--c-red)', agenda: 'var(--c-sky)', crm: 'var(--c-violet)' };
     $('areas').innerHTML = AREAS.map(function (a) {
-      return '<a href="#/' + a.id + '"' + (a.id === R.area ? ' aria-current="page"' : '') + '>' + esc(a.label) + (b[a.id] ? '<span class="badge" title="Itens em atraso">' + b[a.id] + '</span>' : '') + '</a>';
+      var on = a.id === R.area, many = a.subs.length > 1;
+      return '<a class="sn" href="#/' + a.id + '"' + (on ? ' aria-current="page"' : '') + '><span class="si" style="--c:' + AC[a.id] + '">' + ic(a.icon) + '</span><span class="sl">' + esc(a.label) + '</span>'
+        + (b[a.id] ? '<span class="badge" title="Itens em atraso">' + b[a.id] + '</span>' : '') + (many ? '<svg class="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>' : '') + '</a>'
+        + (on && many ? '<div class="ssub">' + a.subs.map(function (sb) { return '<a href="#/' + a.id + '/' + sb[0] + '"' + (sb[0] === R.sub ? ' aria-current="page"' : '') + '>' + esc(sb[1]) + '</a>'; }).join('') + '</div>' : '');
     }).join('');
+    $('sideTasks').innerHTML = sideTasks(M);
     $('bottomnav').innerHTML = AREAS.filter(function (a) { return MOBILE.indexOf(a.id) >= 0; }).map(function (a) {
       return '<a href="#/' + a.id + '"' + (a.id === R.area ? ' aria-current="page"' : '') + '>' + ic(a.icon) + '<span>' + esc(a.label === 'Mensalidades' ? 'Mensal.' : a.label) + '</span>' + (b[a.id] ? '<span class="badge">' + b[a.id] + '</span>' : '') + '</a>';
     }).join('');
@@ -52,6 +57,16 @@
     if (scrollTop) window.scrollTo(0, 0); else window.scrollTo(0, y);
     document.title = area.label + ' · Consultoria Acadêmica';
   };
+
+  function sideTasks(M) {
+    var it = M.prazos.slice(0, 5);
+    return '<div class="sb-h"><span>Próximos prazos</span><a href="#/agenda/prazos">Ver todos</a></div>'
+      + (it.length ? it.map(function (p) {
+        var c = p.dias < 0 ? 'var(--c-red)' : p.dias <= 7 ? 'var(--c-orange)' : 'var(--c-green)';
+        var q = p.dias < 0 ? (-p.dias) + (p.dias === -1 ? ' dia de atraso' : ' dias de atraso') : p.dias === 0 ? 'hoje' : p.dias === 1 ? 'amanhã' : 'em ' + p.dias + ' dias';
+        return '<button type="button" class="sb-i" data-sact="' + (p.kind === 'sv' ? 'sv' : 'dl') + '" data-uid="' + esc(p.kind === 'sv' ? p.s.uid : p.x.uid) + '"><span class="ar" style="--c:' + c + '"><svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg></span><span class="t"><b>' + esc(p.titulo) + '</b><small>' + esc(p.nome) + ' · ' + q + '</small></span></button>';
+      }).join('') : '<p class="sb-e">Nenhuma entrega em aberto.</p>');
+  }
 
   /* ---------- Peças ---------- */
   function head(title, sub, actions) {
@@ -204,53 +219,70 @@
 
   /* ---------- Painel ---------- */
   var VIEWS = {};
+  var AVC = ['var(--c-blue)', 'var(--c-green)', 'var(--c-orange)', 'var(--c-violet)', 'var(--c-red)', 'var(--c-sky)', 'var(--c-yellow)'];
+  function avColor(t) { var h = 0; String(t || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return AVC[h % AVC.length]; }
+  function ini(n) { var p = String(n || '?').trim().split(/\s+/); return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+  function eh(title, more, extra) { return '<div class="eh"><h2>' + title + '</h2>' + (extra || '') + (more ? '<a class="eh-m" href="#/' + more + '" aria-label="Ver tudo">' + ic('chev') + '</a>' : '') + '</div>'; }
   VIEWS['painel/visao'] = function (M) {
-    var hoje = M.hoje, nowYm = hoje.slice(0, 7), nM = CA.S.ui.heroN || 12, P = periodData(M);
-    var mesNome = CA.MES[+nowYm.slice(5, 7) - 1];
+    var hoje = M.hoje, nowYm = hoje.slice(0, 7), nM = CA.S.ui.heroN || 12;
     var dia = +hoje.slice(8, 10), diasMes = new Date(+hoje.slice(0, 4), +hoje.slice(5, 7), 0).getDate();
-    // média dos meses fechados (12 anteriores ao atual)
     var fech = CA.monthSeries(M, CA.ymAdd(nowYm, -12), CA.ymAdd(nowYm, -1)).filter(function (m, i, a) { return a.slice(0, i + 1).some(function (x) { return x.rec > 0; }); });
     var media = fech.length ? fech.reduce(function (t, m) { return t + m.rec; }, 0) / fech.length : 0;
-    var rec = M.now.rec, proj = dia ? rec / dia * diasMes : rec, pctMed = media ? rec / media * 100 : 0, ritmo = dia / diasMes * 100;
-    var out = '<div class="pa"><div class="pa-r1">';
-    // cartão do mês
-    out += '<section class="pa-hero"><div class="l"><span>' + esc(mesNome) + ' de ' + hoje.slice(0, 4) + '</span><span>dia ' + dia + ' de ' + diasMes + '</span></div>'
-      + '<div class="big"><b class="num pv">' + brl(rec) + '</b><small>recebidos até hoje</small></div>'
-      + '<div class="pbar" title="Receita do mês em relação à média mensal"><i style="width:' + Math.min(100, pctMed).toFixed(1) + '%"></i><span class="mk" style="left:' + Math.min(100, ritmo).toFixed(1) + '%" title="Ritmo do mês"></span></div>'
-      + '<div class="ft"><span><b>' + Math.round(pctMed) + '%</b> da média mensal (<span class="pv">' + brl(media) + '</span>)</span><span>ritmo do mês: ' + Math.round(ritmo) + '%</span></div>'
-      + '<div class="r2"><div>Lucro do mês<b class="num pv">' + brl(M.now.res) + '</b></div><div>Despesas<b class="num pv">' + brl(M.now.desp) + '</b></div><div>Projeção<b class="num pv">' + brl(proj) + '</b></div></div></section>';
-    // cartões
-    var recM = M.now.mens, falta = Math.max(0, M.mrr - recM), pm = M.mrr ? Math.min(100, recM / M.mrr * 100) : 0;
-    var atrasoVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0), emDia = M.ativos.length - M.atrasados.length;
-    var nSaldo = M.services.filter(function (s) { return s.saldo > 0; }).length;
-    var tile = function (dot, lb, vl, ft, bottom, go, cls) { return '<button type="button" class="pa-tile' + (cls ? ' ' + cls : '') + '" data-go="' + go + '"><span class="lb"><i style="background:' + dot + '"></i>' + lb + '</span><b class="vl num pv">' + vl + '</b><span class="ft">' + ft + '</span><span class="bt">' + bottom + '</span></button>'; };
-    out += tile('var(--action)', 'Mensalidades do mês', brl(recM), 'de <span class="pv">' + brl(M.mrr) + '</span> previstos' + (falta ? ' · faltam <span class="pv">' + brl(falta) + '</span>' : ''), '<span class="pbar2"><i style="width:' + pm.toFixed(1) + '%"></i></span>', 'mensalidades/competencia');
-    out += tile('var(--warn)', 'A receber de serviços', brl(M.aReceber), nSaldo ? nSaldo + (nSaldo === 1 ? ' serviço com saldo' : ' serviços com saldo') : 'nenhum saldo em aberto', '<span class="lnk">Ver serviços</span>', 'servicos/receber');
-    out += tile(M.atrasados.length ? 'var(--out)' : 'var(--in)', 'Mensalidades em atraso', M.atrasados.length ? M.atrasados.length + ' · ' + brl(atrasoVal) : 'Nenhuma', M.atrasados.length ? emDia + ' mensalistas em dia' : M.ativos.length + ' mensalistas em dia', M.atrasados.length ? '<span class="chip out">cobrar agora</span>' : '<span class="chip in">tudo em dia</span>', 'mensalidades/situacao', M.atrasados.length ? 'bad' : 'ok');
-    out += tile('var(--gold)', 'Lucro acumulado', brl(M.acc.res), 'desde ' + esc(CA.ymShort(M.acc.desde).toLowerCase()) + ' · margem de ' + (M.acc.rec ? Math.round(M.acc.res / M.acc.rec * 100) : 0) + '%', '<span class="lnk">Ver evolução</span>', 'financeiro/evolucao', 'gold');
-    out += '</div><div class="pa-r2">';
-    // gráfico
+    var proj = dia ? M.now.rec / dia * diasMes : M.now.rec;
+    var mesNome = CA.MES[+nowYm.slice(5, 7) - 1].toLowerCase();
     var sr = CA.monthSeries(M, CA.ymAdd(nowYm, -(nM - 1)), nowYm);
-    var seg = '<div class="seg hero-seg" role="group" aria-label="Período">' + [[6, '6 meses'], [12, '12 meses']].map(function (o) { return '<button type="button" data-act="heroN" data-k="' + o[0] + '" aria-pressed="' + (nM === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
-    var tip = function (i) {
-      var m = sr[i], part = m.ym === nowYm, prev = sr[i - 1];
-      var rows = [['Receita', '<b>' + brl(m.rec) + '</b>', 'var(--bar-c)'], ['Despesas', brl(m.desp), 'var(--out)'], ['Lucro líquido', brl(m.res), 'var(--in)']];
-      if (part) rows.push(['Projeção do mês', brl(proj), 'var(--bar-c)']);
-      return CA.tipMonth(CA.ymLabel(m.ym) + (part ? ' · em andamento' : ''), rows, 'Margem ' + (m.rec ? Math.round(m.res / m.rec * 100) + '%' : '—') + (media ? ' · ' + Math.round(m.rec / media * 100) + '% da média' : '') + (prev && prev.rec ? ' · ' + varPct(m.rec, prev.rec) + ' sobre ' + CA.MES3[+prev.ym.slice(5, 7) - 1] : ''));
-    };
-    var g = P; // indicadores do período
-    var pill = function (lb, vl, sm, cls) { return '<div><span>' + lb + '</span><b class="' + (cls || '') + '">' + vl + '</b><small>' + sm + '</small></div>'; };
-    var pc = function (v) { return v == null ? '—' : Math.round(v) + '%'; };
-    var cresc = g.cresc;
-    out += '<section class="panel pa-ch"><div class="panel-h"><h2>Receita por mês <span class="muted">· despesas em vermelho no topo da coluna</span></h2>' + seg + '</div>'
-      + '<div class="plot">' + CA.chart('painelBars', { kind: 'bars', fill: true, months: sr, avg: media, proj: proj, partialLast: true, tip: tip, aria: 'Receita e despesas por mês',
-        tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1]; } }) + '</div>'
-      + '<div class="pa-pills">' + pill('Margem líquida', pc(g.margP), nM + ' meses') + pill('Despesas sobre a receita', pc(g.opxP), '<span class="pv">' + brl(g.desp) + '</span>') + pill('Receita recorrente', pc(g.recorP), 'mensalidades')
-      + pill('Crescimento', cresc == null ? '—' : (cresc >= 0 ? '+' : '−') + Math.abs(Math.round(cresc)) + '%', 'sobre ' + nM + ' anteriores', cresc == null ? '' : cresc >= 0 ? 'up' : 'dn')
-      + '<div class="act"><button type="button" class="lnk" data-act="pnDre">Demonstrativo completo</button></div></div></section>';
-    // compromissos
-    out += timeline(M);
-    return out + '</div></div>';
+    var sum = function (k) { return sr.reduce(function (t, m) { return t + (m[k] || 0); }, 0); };
+    var rec12 = sum('rec'), desp12 = sum('desp');
+    var out = '<div class="erp">';
+    // KPIs
+    var kpi = function (lb, vl, ft, icon, cls, go) { return '<button type="button" class="ek' + (cls ? ' ' + cls : '') + '" data-go="' + go + '"><span class="ek-t"><span class="ek-l">' + lb + '</span><b class="num pv">' + vl + '</b><small>' + ft + '</small></span><span class="ek-i">' + icon + '</span></button>'; };
+    var nEnt = M.prazos.length, nAtr = M.prazos.filter(function (p) { return p.dias < 0; }).length;
+    var atrVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0);
+    out += '<div class="ek-row">'
+      + kpi('Receita de ' + mesNome, brl(M.now.rec), Math.round(media ? M.now.rec / media * 100 : 0) + '% da média · projeção <span class="pv">' + brl(proj) + '</span>', '<svg viewBox="0 0 24 24" class="tr up"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>', '', 'financeiro/resumo')
+      + kpi('Despesas de ' + mesNome, brl(M.now.desp), 'lucro do mês <span class="pv">' + brl(M.now.res) + '</span>', '<svg viewBox="0 0 24 24" class="tr dn"><path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/></svg>', '', 'financeiro/despesas')
+      + kpi('Entregas em aberto', String(nEnt), nAtr ? nAtr + (nAtr === 1 ? ' atrasada' : ' atrasadas') : 'nenhuma atrasada', '<span class="ek-n">' + nEnt + '</span>', 'cnt', 'agenda/prazos')
+      + kpi('Mensalidades em atraso', M.atrasados.length ? String(M.atrasados.length) : 'Nenhuma', M.atrasados.length ? '<span class="pv">' + brl(atrVal) + '</span> a cobrar' : M.ativos.length + ' mensalistas em dia', '<span class="ek-b' + (M.atrasados.length ? '' : ' ok') + '">' + (M.atrasados.length || '✓') + '</span>', M.atrasados.length ? 'bad' : '', 'mensalidades/situacao')
+      + '</div>';
+    // Análise de receita
+    var tr = sr.map(function (m, i) { var w = sr.slice(Math.max(0, i - 2), i + 1).filter(function (x, j, arr) { return !(x.ym === nowYm); }); return w.length ? w.reduce(function (t, x) { return t + x.rec; }, 0) / w.length : null; });
+    tr[tr.length - 1] = null;
+    var seg = '<div class="seg es" role="group" aria-label="Período">' + [[6, '6m'], [12, '12m']].map(function (o) { return '<button type="button" data-act="heroN" data-k="' + o[0] + '" aria-pressed="' + (nM === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
+    var tipA = function (i) { var m = sr[i]; return CA.tipMonth(CA.ymLabel(m.ym) + (m.ym === nowYm ? ' · em andamento' : ''), [['Receita', '<b>' + brl(m.rec) + '</b>', m.rec >= media ? 'var(--c-green)' : m.rec >= media * .6 ? 'var(--c-yellow)' : 'var(--c-red)'], ['Despesas', brl(m.desp), 'var(--out)'], ['Lucro líquido', brl(m.res), 'var(--in)']].concat(tr[i] != null ? [['Tendência (3 meses)', brl(tr[i]), 'var(--c-blue)']] : []), media ? Math.round(m.rec / media * 100) + '% da média mensal' : ''); };
+    out += '<section class="ec ec-an">' + eh('Análise de receita', 'financeiro/evolucao', seg)
+      + '<div class="an-plot">' + '<div class="an-top"><div class="an-box"><span>Receita em ' + nM + ' meses</span><b class="num pv">' + brl(rec12) + '</b></div><div class="an-leg"><span><i style="background:var(--c-green)"></i>acima da média</span><span><i style="background:var(--c-yellow)"></i>abaixo</span><span><i style="background:var(--c-red)"></i>fraco</span><span><i class="ln"></i>tendência</span></div></div>' + CA.chart('erpAn', { kind: 'analise', fill: true, padTop: 66, months: sr, avg: media, trend: tr, partialLast: true, tip: tipA, aria: 'Receita por mês com tendência', tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1]; } }) + '</div></section>';
+    // Últimos lançamentos
+    var lan = M.fin.slice(0, 12).map(function (f) {
+      var out_ = f.tipo === 'desp', nome = out_ ? f.desc : (f.cliente || f.desc), sub = out_ ? 'Despesa' + (f.grupo ? ' · ' + f.grupo : '') : (CA.TIPO[f.tipo] ? CA.TIPO[f.tipo][0].replace(/s$/, '').replace('Serviços eventuai', 'Serviço eventual').replace('Extras de mensalista', 'Extra de mensalista').replace('Outros recebimento', 'Outro recebimento') : 'Lançamento');
+      return '<div class="el"><span class="av" style="--c:' + (out_ ? 'var(--c-red)' : avColor(nome)) + '">' + esc(ini(nome)) + '</span><span class="el-t"><b>' + esc(nome) + '</b><small>' + esc(sub) + ' · ' + CA.dshort(f.data).replace(' ', '/') + '</small></span><span class="ok' + (out_ ? ' o' : '') + '">' + (out_ ? '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>' : '<svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>') + '</span><span class="el-v num pv' + (out_ ? ' out' : '') + '">' + (out_ ? '− ' + brl(f.desp) : brl(f.rec)) + '</span></div>';
+    }).join('');
+    out += '<section class="ec ec-la">' + eh('Últimos lançamentos', 'financeiro/extrato') + '<div class="el-list fitl">' + (lan || '<p class="e-empty">Nenhum lançamento ainda.</p>') + '</div></section>';
+    // Mensalistas
+    var ord = { atraso: 0, breve: 1, semdata: 2, emdia: 3 };
+    var mens = M.rcl.filter(function (x) { return x.status === 'Ativo'; }).sort(function (a, b) { return (ord[a.faixa] - ord[b.faixa]) || String(a.prox).localeCompare(String(b.prox)); }).map(function (x) {
+      var c = x.faixa === 'atraso' ? 'var(--c-red)' : x.faixa === 'breve' ? 'var(--c-yellow)' : 'var(--c-green)';
+      var sub = x.faixa === 'atraso' ? 'venceu ' + CA.dshort(x.prox).replace(' ', '/') : x.prox ? 'vence ' + CA.dshort(x.prox).replace(' ', '/') : 'sem vencimento';
+      return '<button type="button" class="el" data-act="cli" data-cid="' + esc(x.cid) + '"><span class="st" style="--c:' + c + '"><svg viewBox="0 0 24 24">' + (x.faixa === 'atraso' ? '<path d="M12 6v7M12 17.5v.5"/>' : x.faixa === 'breve' ? '<path d="M12 7v5l3 2"/>' : '<path d="m6 12 4 4 8-8"/>') + '</svg></span><span class="el-t"><b>' + esc(x.nome) + '</b><small>' + sub + '</small></span><span class="el-v num pv">' + brl(x.valor) + '</span></button>';
+    }).join('');
+    out += '<section class="ec ec-me">' + eh('Mensalistas', 'mensalidades/situacao', '<span class="eh-c">' + M.ativos.length + '</span>') + '<div class="el-list fitl">' + (mens || '<p class="e-empty">Nenhum mensalista ativo.</p>') + '</div></section>';
+    // Receita por tipo (rosca)
+    var parts = [['Mensalidades', sum('mens'), 'var(--c-green)'], ['Eventuais', sum('event'), 'var(--c-blue)'], ['Extras', sum('extra'), 'var(--c-yellow)'], ['Outros', sum('outro'), 'var(--c-orange)']].filter(function (p) { return p[1] > 0; });
+    out += '<section class="ec ec-do">' + eh('Receita por tipo') + '<div class="do-w"><div class="do-c">' + CA.donut(parts, brl(rec12), nM + ' meses') + '</div><ul class="do-l">' + parts.map(function (p) { return '<li><i style="background:' + p[2] + '"></i><span>' + p[0] + '</span><b class="num">' + (rec12 ? Math.round(p[1] / rec12 * 100) : 0) + '%</b><small class="num pv">' + brl(p[1]) + '</small></li>'; }).join('') + '</ul></div></section>';
+    // Serviços em andamento
+    var sv = M.services.filter(function (x) { return x.ent !== 'Concluído' && x.ent !== 'Cancelado'; }).sort(function (a, b) { return String(a.prazo || '9').localeCompare(String(b.prazo || '9')); }).map(function (x) {
+      return '<button type="button" class="el" data-act="sv" data-uid="' + esc(x.uid) + '"><span class="dot" style="--c:' + avColor(x.servico) + '"></span><span class="el-t"><b>' + esc(x.servico) + '</b><small>' + esc(x.nome) + (x.prazo ? ' · entrega ' + CA.dshort(x.prazo).replace(' ', '/') : '') + '</small></span><span class="el-v num pv">' + brl(x.total) + '</span></button>';
+    }).join('');
+    out += '<section class="ec ec-sv">' + eh('Serviços em andamento', 'servicos/andamento', '<span class="eh-c">' + M.services.filter(function (x) { return x.ent !== 'Concluído' && x.ent !== 'Cancelado'; }).length + '</span>') + '<div class="el-list fitl">' + (sv || '<p class="e-empty">Nenhum serviço em andamento.</p>') + '</div></section>';
+    // Clientes que mais pagaram
+    var since = CA.ymAdd(nowYm, -(nM - 1)), byC = {};
+    M.fin.forEach(function (f) { if (f.tipo === 'desp' || f.ym < since || !f.rec) return; var k = (f.cliente || f.desc || '—').trim(); byC[k] = (byC[k] || 0) + f.rec; });
+    var top = Object.keys(byC).map(function (k) { return [k, byC[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
+    out += '<section class="ec ec-cl">' + eh('Clientes que mais pagaram', 'clientes/base') + '<div class="el-list fitl">' + (top.length ? top.map(function (t) { return '<div class="el"><span class="av" style="--c:' + avColor(t[0]) + '">' + esc(ini(t[0])) + '</span><span class="el-t"><b>' + esc(t[0]) + '</b><small>' + (rec12 ? Math.round(t[1] / rec12 * 100) : 0) + '% da receita</small></span><span class="el-v num pv">' + brl(t[1]) + '</span></div>'; }).join('') : '<p class="e-empty">Sem recebimentos no período.</p>') + '</div></section>';
+    // Despesas
+    var tipD = function (i) { var m = sr[i]; return CA.tipMonth(CA.ymLabel(m.ym), [['Despesas', '<b>' + brl(m.desp) + '</b>', 'var(--out)'], ['% da receita', m.rec ? (Math.round(m.desp / m.rec * 1000) / 10).toString().replace('.', ',') + '%' : '—', 'var(--muted)']], ''); };
+    out += '<section class="ec ec-de">' + eh('Despesas', 'financeiro/despesas') + '<div class="de-top"><span>Total em ' + nM + ' meses</span><b class="num pv">' + brl(desp12) + '</b><small>' + (rec12 ? (Math.round(desp12 / rec12 * 1000) / 10).toString().replace('.', ',') : 0) + '% da receita</small></div><div class="de-bar"><i style="width:' + Math.min(100, rec12 ? desp12 / rec12 * 100 : 0).toFixed(1) + '%"></i></div>'
+      + '<div class="de-plot">' + CA.chart('erpDe', { kind: 'mini', fill: true, values: sr.map(function (m) { return m.desp; }), colors: ['var(--c-red)', 'var(--c-green)', 'var(--c-blue)', 'var(--c-yellow)'], tip: tipD, aria: 'Despesas por mês', tick: function (i) { return CA.MES3[+sr[i].ym.slice(5, 7) - 1].slice(0, nM > 6 ? 1 : 3); } }) + '</div></section>';
+    return out + '</div>';
   };
   function timeline(M) {
     var ev = [];

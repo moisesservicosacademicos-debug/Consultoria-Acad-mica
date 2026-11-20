@@ -115,3 +115,8 @@
   }
   boot();
 })(window.CA);
+/* Prazos da barra lateral */
+document.getElementById('sideTasks').addEventListener('click', function (e) {
+  var el = e.target.closest('[data-sact]');
+  if (el && window.CA && CA.action) CA.action(el.getAttribute('data-sact'), el);
+});

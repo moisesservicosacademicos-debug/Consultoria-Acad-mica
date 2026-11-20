@@ -62,9 +62,17 @@
       var more = tl.parentNode.querySelector('.tl-more'); if (more) { more.textContent = hid ? '+' + hid + ' na agenda' : ''; more.hidden = !hid; }
     });
   };
+  CA.fitLists = function (root) {
+    (root || document).querySelectorAll('.fitl').forEach(function (ls) {
+      var kids = [].slice.call(ls.children); kids.forEach(function (k) { k.hidden = false; });
+      var lim = ls.getBoundingClientRect().bottom;
+      kids.forEach(function (k, i) { if (i > 0 && k.getBoundingClientRect().bottom > lim + 1) k.hidden = true; });
+    });
+  };
   CA.mountCharts = function (root) {
     CA.fitTimeline(root);
-    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : draw)(box, cfg); });
+    setTimeout(function () { CA.fitLists(root); }, 0);
+    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : cfg.kind === 'analise' ? drawAnalise : cfg.kind === 'mini' ? drawMini : draw)(box, cfg); });
   };
   var rT;
   window.addEventListener('resize', function () { clearTimeout(rT); rT = setTimeout(function () { CA.mountCharts(); }, 150); });
@@ -257,6 +265,71 @@
     svg.addEventListener('pointerdown', function (e) { show(e.clientX); });
     svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hide(); });
   }
+
+
+  /* ===== Análise de receita (modelo ERP): colunas coloridas por desempenho + curva de tendência com área ===== */
+  function drawAnalise(box, cfg) {
+    var W = Math.max(260, box.clientWidth), H = Math.max(140, box.clientHeight || 220), mobile = W < 520;
+    var ms = cfg.months, n = ms.length, last = n - 1, tr = cfg.trend;
+    var mx = 1; ms.forEach(function (m, i) { mx = Math.max(mx, m.rec, tr[i] || 0); });
+    var nk = nice(mx * 1.08, 0), L = axisW(nk, mobile) + 4, R = 8, T = cfg.padTop || 10, B = 22;
+    var y = function (v) { return T + (H - T - B) * (1 - v / (nk.hi || 1)); };
+    var st = (W - L - R) / n, cx = function (i) { return L + st * i + st / 2; }, bw = Math.min(st * .42, 26);
+    var id = box.getAttribute('data-chart');
+    var s = '<svg class="anl" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || '') + '"><defs>'
+      + '<linearGradient id="' + id + 'g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--c-blue);stop-opacity:.22"/><stop offset="1" style="stop-color:var(--c-blue);stop-opacity:0"/></linearGradient>'
+      + '<pattern id="' + id + 'h" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" style="fill:var(--c-blue);opacity:.18"/><line x1="0" y1="0" x2="0" y2="5" style="stroke:var(--c-blue);stroke-width:2;opacity:.5"/></pattern></defs>';
+    for (var v = 0; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (v === 0 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 6) + '" y="' + (y(v) + 3.5) + '" text-anchor="end">' + esc(CA.brl(v)) + '</text>';
+    ms.forEach(function (m, i) {
+      var part = cfg.partialLast && i === last, r = m.rec, col = r >= cfg.avg ? 'var(--c-green)' : r >= cfg.avg * .6 ? 'var(--c-yellow)' : 'var(--c-red)';
+      s += '<g class="col" data-i="' + i + '">';
+      if (r > 0) s += '<path d="' + topRound(cx(i) - bw / 2, y(r), bw, y(0) - y(r), 3) + '" style="fill:' + (part ? 'url(#' + id + 'h)' : col) + '"/>';
+      s += '<text class="xt' + (part ? ' now' : '') + '" x="' + cx(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(cfg.tick(i)) + '</text></g>';
+    });
+    var pts = tr.map(function (v, i) { return v == null ? null : [cx(i), y(v)]; }).filter(Boolean);
+    if (pts.length > 1) {
+      var d = smooth(pts);
+      s += '<path d="' + d + 'L' + pts[pts.length - 1][0] + ',' + y(0) + 'L' + pts[0][0] + ',' + y(0) + 'Z" style="fill:url(#' + id + 'g)"/>';
+      s += '<path class="tl-ln" d="' + d + '"/>';
+      pts.forEach(function (p) { s += '<circle class="tl-dt" cx="' + p[0] + '" cy="' + p[1] + '" r="3"/>'; });
+    }
+    s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';
+    box.innerHTML = s; hoverCols(box, n, L, st, cx, bw, cfg.tip);
+  }
+  /* Mini colunas (despesas por mês) */
+  function drawMini(box, cfg) {
+    var W = Math.max(120, box.clientWidth), H = Math.max(60, box.clientHeight || 90), v = cfg.values, n = v.length;
+    var mx = Math.max.apply(null, v.concat([1])), T = 6, B = 16, st = W / n, bw = Math.min(st * .5, 14);
+    var y = function (x) { return T + (H - T - B) * (1 - x / mx); };
+    var s = '<svg class="mini" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || '') + '"><line class="gl z" x1="0" x2="' + W + '" y1="' + y(0) + '" y2="' + y(0) + '"/>';
+    v.forEach(function (x, i) {
+      var c = cfg.colors[i % cfg.colors.length];
+      s += '<g class="col" data-i="' + i + '">' + (x > 0 ? '<path d="' + topRound(st * i + st / 2 - bw / 2, y(x), bw, y(0) - y(x), 2) + '" style="fill:' + c + '"/>' : '') + '<text class="xt" x="' + (st * i + st / 2) + '" y="' + (H - 3) + '" text-anchor="middle">' + esc(cfg.tick(i)) + '</text></g>';
+    });
+    s += '<rect class="hit" x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';
+    box.innerHTML = s; hoverCols(box, n, 0, st, function (i) { return st * i + st / 2; }, bw, cfg.tip);
+  }
+  function hoverCols(box, n, L, st, cx, bw, tipFn) {
+    var svg = box.querySelector('svg'), tip = box.querySelector('.tip'), cols = svg.querySelectorAll('.col'), lastI = -1, W = box.clientWidth;
+    function show(clientX) {
+      var rr = svg.getBoundingClientRect(), k = Math.max(0, Math.min(n - 1, Math.floor((clientX - rr.left - L) / st)));
+      if (k === lastI) return; lastI = k;
+      svg.classList.add('hov'); cols.forEach(function (c) { c.classList.toggle('on', +c.getAttribute('data-i') === k); });
+      tip.innerHTML = tipFn(k); tip.hidden = false;
+      var tw = tip.offsetWidth, left = cx(k) + bw / 2 + 10; if (left + tw > W - 4) left = cx(k) - bw / 2 - tw - 10; if (left < 4) left = 4;
+      tip.style.left = left + 'px';
+    }
+    svg.addEventListener('pointermove', function (e) { show(e.clientX); });
+    svg.addEventListener('pointerdown', function (e) { show(e.clientX); });
+    svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') { tip.hidden = true; svg.classList.remove('hov'); lastI = -1; } });
+  }
+  /* Rosca (donut) estática */
+  CA.donut = function (parts, center, sub) {
+    var tot = parts.reduce(function (t, p) { return t + p[1]; }, 0) || 1, r = 38, c = 2 * Math.PI * r, off = 0;
+    var s = '<svg viewBox="0 0 100 100" class="donut" aria-hidden="true"><circle cx="50" cy="50" r="' + r + '" class="d-tr"/>';
+    parts.forEach(function (p) { var len = c * p[1] / tot; if (len > 0) s += '<circle cx="50" cy="50" r="' + r + '" style="stroke:' + p[2] + '" stroke-dasharray="' + Math.max(0, len - 1.2) + ' ' + c + '" stroke-dashoffset="' + (-off) + '" transform="rotate(-90 50 50)"/>'; off += len; });
+    return s + '</svg><div class="d-c"><b class="num pv">' + center + '</b><span>' + sub + '</span></div>';
+  };
 
   /* Medidor em arco (270°) */
   CA.gauge = function (pct, label, sub, tone) {
