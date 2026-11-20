@@ -399,13 +399,13 @@
     // gráfico principal
     var tip = function (i) {
       var y = years[i], rows = CLI_CATS.map(function (c) { return [c[1], '<b>' + (y.v[c[0]] || 0) + '</b>', c[2]]; });
-      rows.push(['Total de novos', '<b>' + tot[i] + '</b>', 'var(--ink)']); rows.push(['Base acumulada', acc[i], 'var(--c-violet)']);
+      rows.push(['Total de novos', '<b>' + tot[i] + '</b>', 'var(--ink)']); rows.push(['Base acumulada', acc[i], 'var(--acc-c)']);
       var p0 = i > 0 ? tot[i - 1] : 0, vs = i > 0 ? (y.partial ? fmtV(pct(tot[i], sumO(years[i - 1].ytd))) + ' sobre o mesmo período de ' + years[i - 1].y : fmtV(pct(tot[i], p0)) + ' sobre ' + years[i - 1].y) : 'primeiro ano';
       return CA.tipMonth(String(y.y) + (y.partial ? ' · até ' + dm : ''), rows, vs);
     };
-    out += '<section class="panel c12 cli-ev"><div class="panel-h"><div><h2>Novos clientes por ano</h2><p class="muted">Colunas: novos cadastros por tipo. Linha roxa: tamanho da base acumulada (eixo da direita).</p></div></div><div class="panel-b">'
+    out += '<section class="panel c12 cli-ev"><div class="panel-h"><div><h2>Novos clientes por ano</h2><p class="muted">Faixa de cima: quantos clientes a base já somava no fim de cada ano. Colunas: novos cadastros do ano, por tipo.</p></div></div><div class="panel-b">'
       + '<div class="hero-leg">' + CLI_CATS.map(function (c) { return '<span><i class="sq" style="background:' + c[2] + '"></i>' + c[1] + '</span>'; }).join('') + '<span><i class="ln-acc"></i>Base acumulada</span></div>'
-      + CA.chart('cliYears', { kind: 'ystack', height: 320, cats: CLI_CATS, years: years, acc: acc, tip: tip, aria: 'Novos clientes por ano e base acumulada' }) + '</div></section>';
+      + CA.chart('cliYears', { kind: 'ystack', height: 380, cats: CLI_CATS, years: years, acc: acc, tip: tip, aria: 'Novos clientes por ano e base acumulada' }) + '</div></section>';
     // tabela ano a ano
     var th = '<tr><th>Tipo</th>' + years.map(function (y) { return '<th class="r">' + y.y + (y.partial ? '*' : '') + '</th>'; }).join('') + (prev ? '<th class="r">' + prev.y + ' até ' + dm + '</th><th class="r">Variação no período</th>' : '') + '</tr>';
     var rowsT = CLI_CATS.map(function (c) {
