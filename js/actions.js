@@ -58,13 +58,7 @@
       case 'tlMore': showMoreTimeline(); break;
       case 'pnDre': CA.painelDrawer('dre'); break;
       case 'pnTk': CA.painelDrawer('tk'); break;
-      case 'heroN':
-        if (CA.S.ui.heroN === +g('data-k') || (!CA.S.ui.heroN && +g('data-k') === 12)) break;
-        CA.S.ui.heroN = +g('data-k');
-        document.documentElement.classList.add('soft-swap');
-        CA.render();
-        requestAnimationFrame(function () { setTimeout(function () { document.documentElement.classList.remove('soft-swap'); }, 400); });
-        break;
+      case 'heroN': trocarPeriodo(+g('data-k')); break;
       case 'yoyMetric': CA.S.ui.yoyMetric = g('data-k'); CA.render(); break;
     }
   };
@@ -729,6 +723,38 @@
         };
       }
     });
+  }
+
+  /* Troca 6/12 meses: só Análise de receita, Receita por tipo e Despesas se transformam;
+     o resto do painel fica intacto. A troca é um cruzamento suave entre o quadro antigo e o novo. */
+  function trocarPeriodo(n) {
+    if ((CA.S.ui.heroN || 12) === n) return;
+    CA.S.ui.heroN = n;
+    var view = CA.$('view');
+    if (!view.querySelector('.erp') || !CA.VIEWS['painel/visao']) { CA.render(); return; }
+    var tmp = document.createElement('div'); tmp.innerHTML = CA.VIEWS['painel/visao'](CA.M());
+    var reduz = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    ['.ec-an', '.ec-do', '.ec-de'].forEach(function (sel) {
+      var cur = view.querySelector(sel), neu = tmp.querySelector(sel); if (!cur || !neu) return;
+      [].slice.call(cur.querySelectorAll('.xf-ghost')).forEach(function (g0) { g0.remove(); });
+      [].slice.call(cur.querySelectorAll('.xf-new')).forEach(function (w0) { unwrap(cur, w0); });
+      var ghost = document.createElement('div'); ghost.className = 'xf-ghost'; ghost.setAttribute('aria-hidden', 'true');
+      [].slice.call(cur.childNodes).forEach(function (ch) { ghost.appendChild(ch); });
+      var fresh = document.createElement('div'); fresh.className = 'xf-new';
+      [].slice.call(neu.childNodes).forEach(function (ch) { fresh.appendChild(ch); });
+      cur.appendChild(fresh); cur.appendChild(ghost); cur.classList.add('xf');
+      CA.mountCharts(fresh);
+      if (reduz) { ghost.remove(); unwrap(cur, fresh); return; }
+      fresh.style.opacity = '0';
+      requestAnimationFrame(function () { requestAnimationFrame(function () { fresh.style.opacity = '1'; ghost.style.opacity = '0'; }); });
+      setTimeout(function () { if (ghost.parentNode) ghost.remove(); unwrap(cur, fresh); }, 820);
+    });
+  }
+  function unwrap(sec, wrap) {
+    if (!wrap.parentNode) return;
+    wrap.style.opacity = '';
+    while (wrap.firstChild) sec.insertBefore(wrap.firstChild, wrap);
+    wrap.remove(); sec.classList.remove('xf');
   }
 
   /* Compromissos que não couberam no painel */

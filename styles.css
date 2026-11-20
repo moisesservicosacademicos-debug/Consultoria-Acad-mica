@@ -1303,7 +1303,21 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 [data-theme="dark"] .chart-box .ystk .acc-t { fill: #0D1424; }
 .chart-box .ystk .guide-v { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 4; }
 .cli-tb th, .cli-tb td { padding-left: 10px; padding-right: 10px; }
-/* Troca de período suave: só os gráficos e números mudam com um leve esmaecer */
-@keyframes softIn { from { opacity: .35; } to { opacity: 1; } }
-.soft-swap .chart-box svg, .soft-swap .el-list, .soft-swap .do-w, .soft-swap .an-box b, .soft-swap .de-top b { animation: softIn .32s ease-out; }
-@media (prefers-reduced-motion: reduce) { .soft-swap * { animation: none !important; } }
+/* Troca 6/12 meses: cruzamento suave só nos cartões que mudam */
+.ec.xf { position: relative; }
+.xf-new { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; transition: opacity .32s ease-out .06s; }
+.xf-ghost { position: absolute; inset: 11px 14px 10px; display: flex; flex-direction: column; pointer-events: none; transition: opacity .18s ease-in; }
+.xf-ghost .eh { visibility: hidden; }
+.xf-new .eh { opacity: 1; }
+/* as colunas crescem a partir da base e a linha se desenha: efeito de transformação */
+@keyframes xfGrow { from { transform: scaleY(.15); } to { transform: scaleY(1); } }
+@keyframes xfDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes xfSpin { from { transform: rotate(-35deg) scale(.94); opacity: .4; } to { transform: none; opacity: 1; } }
+.xf-new .chart-box .col path { transform-box: fill-box; transform-origin: 50% 100%; animation: xfGrow .55s cubic-bezier(.2, .8, .2, 1) both; }
+.xf-new .chart-box .col:nth-child(odd) path { animation-delay: .02s; }
+.xf-new .chart-box .tl-ln { stroke-dasharray: 1; stroke-dashoffset: 0; animation: xfDraw .6s ease-out both; }
+.xf-new .chart-box .tl-dt { animation: softIn .5s ease-out .25s both; }
+.xf-new .donut { animation: xfSpin .55s cubic-bezier(.2, .8, .2, 1) both; transform-origin: 50% 50%; }
+@media (prefers-reduced-motion: reduce) { .xf-new *, .xf-new, .xf-ghost { animation: none !important; transition: none !important; } }
+.xf-ghost .eh, .xf-new .eh { flex: none; }
+@keyframes softIn { from { opacity: 0; } to { opacity: 1; } }

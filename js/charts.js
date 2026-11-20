@@ -290,7 +290,7 @@
     if (pts.length > 1) {
       var d = smooth(pts);
       s += '<path d="' + d + 'L' + pts[pts.length - 1][0] + ',' + y(0) + 'L' + pts[0][0] + ',' + y(0) + 'Z" style="fill:url(#' + id + 'g)"/>';
-      s += '<path class="tl-ln" d="' + d + '"/>';
+      s += '<path class="tl-ln" pathLength="1" d="' + d + '"/>';
       pts.forEach(function (p) { s += '<circle class="tl-dt" cx="' + p[0] + '" cy="' + p[1] + '" r="3"/>'; });
     }
     s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';

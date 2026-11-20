@@ -220,7 +220,7 @@
   }
 
   /* ---------- Painel ---------- */
-  var VIEWS = {};
+  var VIEWS = CA.VIEWS = {};
   var AVC = ['var(--c-blue)', 'var(--c-green)', 'var(--c-orange)', 'var(--c-violet)', 'var(--c-red)', 'var(--c-sky)', 'var(--c-yellow)'];
   function avColor(t) { var h = 0; String(t || '').split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) >>> 0; }); return AVC[h % AVC.length]; }
   function ini(n) { var p = String(n || '?').trim().split(/\s+/); return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
@@ -276,10 +276,10 @@
     }).join('');
     out += '<section class="ec ec-sv">' + eh('Serviços em andamento', 'servicos/andamento', '<span class="eh-c">' + M.services.filter(function (x) { return x.ent !== 'Concluído' && x.ent !== 'Cancelado'; }).length + '</span>') + '<div class="el-list fitl">' + (sv || '<p class="e-empty">Nenhum serviço em andamento.</p>') + '</div></section>';
     // Clientes que mais pagaram
-    var since = CA.ymAdd(nowYm, -(nM - 1)), byC = {};
-    M.fin.forEach(function (f) { if (f.tipo === 'desp' || f.ym < since || !f.rec) return; var k = (f.cliente || f.desc || '—').trim(); byC[k] = (byC[k] || 0) + f.rec; });
+    var since = CA.ymAdd(nowYm, -11), byC = {}, rec12f = 0;
+    M.fin.forEach(function (f) { if (f.tipo === 'desp' || f.ym < since || !f.rec) return; var k = (f.cliente || f.desc || '—').trim(); byC[k] = (byC[k] || 0) + f.rec; rec12f += f.rec; });
     var top = Object.keys(byC).map(function (k) { return [k, byC[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
-    out += '<section class="ec ec-cl">' + eh('Clientes que mais pagaram', 'clientes/base') + '<div class="el-list fitl">' + (top.length ? top.map(function (t) { return '<div class="el"><span class="av" style="--c:' + avColor(t[0]) + '">' + esc(ini(t[0])) + '</span><span class="el-t"><b>' + esc(t[0]) + '</b><small>' + (rec12 ? Math.round(t[1] / rec12 * 100) : 0) + '% da receita</small></span><span class="el-v num pv">' + brl(t[1]) + '</span></div>'; }).join('') : '<p class="e-empty">Sem recebimentos no período.</p>') + '</div></section>';
+    out += '<section class="ec ec-cl">' + eh('Clientes que mais pagaram', 'clientes/base') + '<div class="el-list fitl">' + (top.length ? top.map(function (t) { return '<div class="el"><span class="av" style="--c:' + avColor(t[0]) + '">' + esc(ini(t[0])) + '</span><span class="el-t"><b>' + esc(t[0]) + '</b><small>' + (rec12f ? Math.round(t[1] / rec12f * 100) : 0) + '% da receita em 12 meses</small></span><span class="el-v num pv">' + brl(t[1]) + '</span></div>'; }).join('') : '<p class="e-empty">Sem recebimentos no período.</p>') + '</div></section>';
     // Despesas
     var tipD = function (i) { var m = sr[i]; return CA.tipMonth(CA.ymLabel(m.ym), [['Despesas', '<b>' + brl(m.desp) + '</b>', 'var(--out)'], ['% da receita', m.rec ? (Math.round(m.desp / m.rec * 1000) / 10).toString().replace('.', ',') + '%' : '—', 'var(--muted)']], ''); };
     out += '<section class="ec ec-de">' + eh('Despesas', 'financeiro/despesas') + '<div class="de-top"><span>Total em ' + nM + ' meses</span><b class="num pv">' + brl(desp12) + '</b><small>' + (rec12 ? (Math.round(desp12 / rec12 * 1000) / 10).toString().replace('.', ',') : 0) + '% da receita</small></div><div class="de-bar"><i style="width:' + Math.min(100, rec12 ? desp12 / rec12 * 100 : 0).toFixed(1) + '%"></i></div>'
