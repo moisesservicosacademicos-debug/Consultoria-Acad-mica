@@ -6,7 +6,7 @@ window.CA = window.CA || {};
     url: 'https://teemhlpfcnhfwveedmym.supabase.co',
     key: 'sb_publishable_DQ9AGXIkznhUj_bg-whWFg_YjYlmMtl',
     ws: 'nova_empresa_main',
-    version: '3.1.0',
+    version: '3.2.0',
     poll: 30000
   };
 
@@ -127,6 +127,7 @@ window.CA = window.CA || {};
       var e = new Error(m); e.code = error && error.code; return e;
     }
     return {
+      sb: sb,
       getSession: async function () { var r = await sb.auth.getSession(); return r.data.session; },
       signIn: async function (email, password) {
         var r = await sb.auth.signInWithPassword({ email: email, password: password });

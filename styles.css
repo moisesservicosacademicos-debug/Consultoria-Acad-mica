@@ -1246,3 +1246,12 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 @keyframes naIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @media (max-width: 900px) { .nt-alert { top: auto; bottom: 74px; } }
 @media (max-width: 900px) { .na-l { max-height: 190px; } }
+.np { display: grid; gap: 4px; padding: 12px 16px; background: var(--action-soft); border-bottom: 1px solid var(--line); }
+.np b { font-size: var(--fs-s); color: var(--ink); display: flex; align-items: center; gap: 6px; }
+.np span { font-size: var(--fs-xs); color: var(--ink-2); line-height: 1.4; }
+.np .btn { justify-self: start; margin-top: 4px; min-height: 30px; font-size: var(--fs-xs); }
+.np > div { display: flex; gap: 6px; margin-top: 4px; }
+.np > div .btn { margin: 0; }
+.np-on { background: var(--in-soft); }
+.np-on b i { width: 8px; height: 8px; border-radius: 50%; background: var(--in); display: inline-block; }
+.np-off { background: var(--surface-2); }

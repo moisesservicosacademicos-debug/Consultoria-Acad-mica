@@ -50,10 +50,76 @@
       + '</div></div>';
   }
 
+
+  /* ---------- Notificações no celular (Web Push) ---------- */
+  var VAPID = 'BLpGy8MXTFSiiZUAyJIRj5o6wVvl0-hjojvHI7QwCS_UQDrGFcu7a_Yq3hugYZtnocaXryf-5jk48i60v5wp1i8';
+  var P = CA.push = { sub: null, busy: false, synced: false };
+  P.suportado = function () { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; };
+  P.ios = function () { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); };
+  P.standalone = function () { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; };
+  function b64(u) { var p = '='.repeat((4 - u.length % 4) % 4), s = atob((u + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
+  function aparelho() { var u = navigator.userAgent; return (/iphone/i.test(u) ? 'iPhone' : /ipad/i.test(u) ? 'iPad' : /android/i.test(u) ? 'Android' : /windows/i.test(u) ? 'Windows' : /mac/i.test(u) ? 'Mac' : 'Navegador') + (P.standalone() ? ' (app)' : ''); }
+  var swReg = null;
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function (r) { swReg = r; return r.pushManager && r.pushManager.getSubscription(); }).then(function (s) { P.sub = s || null; refreshPainel(); }).catch(function () {});
+  }
+  async function salvar(sub) {
+    var j = sub.toJSON(), sb = CA.api && CA.api.sb; if (!sb) throw new Error('Entre no sistema antes de ativar.');
+    var r = await sb.from('push_subscriptions').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, device: aparelho() }, { onConflict: 'endpoint' });
+    if (r.error) throw new Error(r.error.message);
+  }
+  P.sync = async function () {
+    if (P.synced || !P.suportado() || Notification.permission !== 'granted' || !CA.api) return;
+    P.synced = true;
+    try { var reg = swReg || await navigator.serviceWorker.ready, s = await reg.pushManager.getSubscription(); if (s) { P.sub = s; await salvar(s); } } catch (e) { P.synced = false; }
+  };
+  P.ativar = async function () {
+    if (!P.suportado()) throw new Error(P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início e ative por lá.' : 'Este navegador não recebe notificações.');
+    var perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error('Permissão negada. Libere as notificações do sistema nos ajustes do celular e tente de novo.');
+    var reg = swReg || await navigator.serviceWorker.ready;
+    var s = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
+    await salvar(s); P.sub = s;
+    await P.testar();
+  };
+  P.testar = async function () {
+    if (!P.sub) throw new Error('Ative as notificações primeiro.');
+    var r = await CA.api.sb.functions.invoke('push-notify', { body: { mode: 'test', endpoint: P.sub.endpoint } });
+    if (r.error) throw new Error('Não foi possível enviar o teste agora.');
+    if (r.data && r.data.ok === 0) throw new Error('O aviso de teste não chegou ao aparelho. Desative e ative de novo.');
+  };
+  P.desativar = async function () {
+    if (!P.sub) return;
+    var ep = P.sub.endpoint;
+    try { await P.sub.unsubscribe(); } catch (e) {}
+    if (CA.api) await CA.api.sb.from('push_subscriptions').delete().eq('endpoint', ep);
+    P.sub = null;
+  };
+  function pushBox() {
+    if (!P.suportado()) {
+      return '<div class="np np-off"><b>Notificações no celular</b><span>' + (P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início para ativar os avisos.' : 'Este navegador não recebe notificações. Use o Chrome no Android ou o ícone da tela de início no iPhone.') + '</span></div>';
+    }
+    if (Notification.permission === 'denied') return '<div class="np np-off"><b>Notificações bloqueadas neste aparelho</b><span>Libere nos ajustes do celular (Notificações › Consultoria) e toque em Ativar de novo.</span><button type="button" class="btn sm" data-np="on">Tentar de novo</button></div>';
+    if (P.sub) return '<div class="np np-on"><b><i></i>Avisos ativados neste aparelho</b><span>Você recebe os alertas mesmo com o sistema fechado.</span><div><button type="button" class="btn sm" data-np="test">Enviar teste</button><button type="button" class="btn sm ghost" data-np="off">Desativar</button></div></div>';
+    return '<div class="np"><b>Receba os alertas no celular</b><span>Avisos de entregas, provas e agendamentos chegam mesmo com o sistema fechado.</span><button type="button" class="btn sm primary" data-np="on">Ativar neste aparelho</button></div>';
+  }
+  function refreshPainel() { var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(itens()); }
+  document.addEventListener('click', async function (e) {
+    var b = e.target.closest('[data-np]'); if (!b || P.busy) return;
+    e.stopPropagation();
+    var k = b.getAttribute('data-np'); P.busy = true; b.disabled = true; var t0 = b.textContent; b.textContent = 'Aguarde…';
+    try {
+      if (k === 'on') { await P.ativar(); CA.toast('Pronto! Enviamos um aviso de teste para este aparelho.'); }
+      else if (k === 'test') { await P.testar(); CA.toast('Aviso de teste enviado. Deve chegar em alguns segundos.'); }
+      else if (k === 'off') { await P.desativar(); CA.toast('Avisos desativados neste aparelho.'); }
+    } catch (err) { CA.toast(err.message || String(err), 'err'); }
+    P.busy = false; b.disabled = false; b.textContent = t0; refreshPainel();
+  }, true);
+
   /* ---------- Sino no cabeçalho + painel ---------- */
   function painelHTML(L) {
     var atr = L.filter(function (n) { return n.dias < 0; }).length;
-    return '<div class="nt-h"><b>Notificações</b><span>' + (L.length ? L.length + (L.length === 1 ? ' pendência' : ' pendências') + (atr ? ' · ' + atr + ' em atraso' : '') : 'nenhuma pendência') + '</span></div>'
+    return pushBox() + '<div class="nt-h"><b>Notificações</b><span>' + (L.length ? L.length + (L.length === 1 ? ' pendência' : ' pendências') + (atr ? ' · ' + atr + ' em atraso' : '') : 'nenhuma pendência') + '</span></div>'
       + (L.length ? '<div class="nt-l">' + L.map(function (n) { return linha(n); }).join('') + '</div>'
         : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova ou trabalho agendado.</span></div>')
       + '<div class="nt-f"><span>Avisos de entregas e agendamentos com prazo em até 2 dias. Somem ao marcar como resolvido.</span><a href="#/agenda/prazos" data-nclose>Ver agenda</a></div>';
@@ -84,6 +150,7 @@
 
   CA.atualizarNotificacoes = function () {
     var b = $('btnNotif'); if (!b || !CA.S.data) return;
+    if (CA.push && !CA.push.synced) CA.push.sync();
     var L = itens(), c = $('notifCount');
     c.textContent = L.length > 99 ? '99+' : L.length; c.hidden = !L.length;
     b.classList.toggle('has', !!L.length);
