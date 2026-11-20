@@ -59,12 +59,14 @@
   };
 
   function sideTasks(M) {
-    var it = M.prazos.slice(0, 5);
+    var it = M.prazos.filter(function (p) { return CA.isISO(p.prazo); }).map(function (p) { return { titulo: p.titulo, nome: p.nome, dias: p.dias, d: p.prazo, act: p.kind === 'sv' ? 'sv' : 'dl', uid: p.kind === 'sv' ? p.s.uid : p.x.uid }; })
+      .concat(M.schedules.filter(function (s) { return s.open && CA.isISO(s.data); }).map(function (s) { return { titulo: s.desc || s.tipo || 'Compromisso', nome: s.nome, dias: s.dias, d: s.data, act: 'sch', uid: s.uid }; }))
+      .sort(function (a, b) { return a.d.localeCompare(b.d); }).slice(0, 5);
     return '<div class="sb-h"><span>Próximos prazos</span><a href="#/agenda/prazos">Ver todos</a></div>'
       + (it.length ? it.map(function (p) {
-        var c = p.dias < 0 ? 'var(--c-red)' : p.dias <= 7 ? 'var(--c-orange)' : 'var(--c-green)';
+        var c = p.dias < 0 ? 'var(--c-red)' : p.dias <= 2 ? 'var(--c-orange)' : 'var(--c-green)';
         var q = p.dias < 0 ? (-p.dias) + (p.dias === -1 ? ' dia de atraso' : ' dias de atraso') : p.dias === 0 ? 'hoje' : p.dias === 1 ? 'amanhã' : 'em ' + p.dias + ' dias';
-        return '<button type="button" class="sb-i" data-sact="' + (p.kind === 'sv' ? 'sv' : 'dl') + '" data-uid="' + esc(p.kind === 'sv' ? p.s.uid : p.x.uid) + '"><span class="ar" style="--c:' + c + '"><svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg></span><span class="t"><b>' + esc(p.titulo) + '</b><small>' + esc(p.nome) + ' · ' + q + '</small></span></button>';
+        return '<button type="button" class="sb-i" data-sact="' + p.act + '" data-uid="' + esc(p.uid) + '"><span class="ar" style="--c:' + c + '"><svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg></span><span class="t"><b>' + esc(p.titulo) + '</b><small>' + esc(p.nome) + ' · ' + q + '</small></span></button>';
       }).join('') : '<p class="sb-e">Nenhuma entrega em aberto.</p>');
   }
 

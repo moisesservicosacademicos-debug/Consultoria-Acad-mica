@@ -8,8 +8,8 @@
 <title>Consultoria Acadêmica · Gestão</title>
 <link rel="icon" href="assets/logo-mini.webp" type="image/webp">
 <link rel="preload" href="assets/inter.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="styles.css?v=3.0.0">
-<script src="boot.js?v=3.0.0"></script>
+<link rel="stylesheet" href="styles.css?v=3.1.0">
+<script src="boot.js?v=3.1.0"></script>
 </head>
 <body>
 
@@ -44,6 +44,7 @@
       <button type="button" class="tsearch" id="btnSearch" aria-label="Buscar (Ctrl+K)"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Buscar aluno, serviço ou lançamento…</span><kbd>Ctrl K</kbd></button>
       <div class="top-actions">
         <div class="sync" id="sync" aria-live="polite"></div>
+        <button type="button" class="nbell" id="btnNotif" aria-label="Notificações" aria-haspopup="dialog" aria-expanded="false"><span class="nb-ic"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="nb-c" id="notifCount" hidden>0</span></span><span class="nb-l">Notificações</span></button>
         <button class="btn gold" id="btnLaunch"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Lançar</span></button>
         <button class="userpill" id="btnMenu" aria-label="Menu da conta" aria-haspopup="menu" aria-expanded="false"><span class="av">MS</span><span class="nm">Moisés</span><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
@@ -63,6 +64,8 @@
 </div>
 
 <div id="menu" class="menu" role="menu" hidden></div>
+<div id="notifPanel" class="nt-panel" role="dialog" aria-label="Notificações" hidden></div>
+<div id="notifAlert" class="nt-alert" role="alert" hidden></div>
 <div id="overlay" class="overlay" hidden></div>
 <div id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden></div>
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" hidden></div>
@@ -70,11 +73,12 @@
 <div id="splash" class="splash"><img src="assets/logo-mono.webp" alt="" width="64" height="56"><span>Carregando a base…</span></div>
 
 <script src="vendor/supabase.js?v=2.119.1"></script>
-<script src="js/core.js?v=3.0.0"></script>
-<script src="js/model.js?v=3.0.0"></script>
-<script src="js/charts.js?v=3.0.0"></script>
-<script src="js/views.js?v=3.0.0"></script>
-<script src="js/actions.js?v=3.0.0"></script>
-<script src="js/main.js?v=3.0.0"></script>
+<script src="js/core.js?v=3.1.0"></script>
+<script src="js/model.js?v=3.1.0"></script>
+<script src="js/charts.js?v=3.1.0"></script>
+<script src="js/views.js?v=3.1.0"></script>
+<script src="js/actions.js?v=3.1.0"></script>
+<script src="js/notify.js?v=3.1.0"></script>
+<script src="js/main.js?v=3.1.0"></script>
 </body>
 </html>

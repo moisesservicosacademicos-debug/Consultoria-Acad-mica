@@ -87,7 +87,7 @@
     if (k === 'priv') { setPriv(!document.documentElement.hasAttribute('data-private')); }
     if (k === 'refresh') { CA.action('refresh'); }
     if (k === 'backup') { backup(); }
-    if (k === 'out') { clearInterval(pollT); await CA.api.signOut(); S.data = null; S.revision = null; CA.invalidate(); $('view').innerHTML = ''; showLogin(); }
+    if (k === 'out') { clearInterval(pollT); if (CA.resetNotificacoes) CA.resetNotificacoes(); await CA.api.signOut(); S.data = null; S.revision = null; CA.invalidate(); $('view').innerHTML = ''; showLogin(); }
   });
   function backup() {
     if (!S.data) return;
