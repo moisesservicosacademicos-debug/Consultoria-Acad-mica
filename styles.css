@@ -1302,3 +1302,4 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 .chart-box .ystk .acc-t { fill: #fff; stroke: none; font-size: 10.5px; font-weight: 700; paint-order: normal; }
 [data-theme="dark"] .chart-box .ystk .acc-t { fill: #0D1424; }
 .chart-box .ystk .guide-v { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 4; }
+.cli-tb th, .cli-tb td { padding-left: 10px; padding-right: 10px; }

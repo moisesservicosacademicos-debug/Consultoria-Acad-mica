@@ -327,7 +327,7 @@
         s += top ? '<path d="' + topRound(x, y2, bw, y1 - y2, 5) + '" style="fill:' + c[2] + '"' + (part ? ' class="part"' : '') + '/>' : '<rect x="' + x + '" y="' + y2 + '" width="' + bw + '" height="' + (y1 - y2) + '" style="fill:' + c[2] + '"' + (part ? ' class="part"' : '') + '/>';
         if (y1 - y2 >= 16 && bw >= 26) s += '<text class="sv" x="' + cx(i) + '" y="' + ((y1 + y2) / 2 + 4) + '" text-anchor="middle">' + val + '</text>';
       });
-      s += '<text class="tv" x="' + cx(i) + '" y="' + (yB(tot[i]) - 8) + '" text-anchor="middle">' + tot[i] + (tot[i] === 1 ? ' novo' : ' novos') + (part ? '*' : '') + '</text>';
+      s += '<text class="tv" x="' + cx(i) + '" y="' + (yB(tot[i]) - 8) + '" text-anchor="middle">' + (i === 0 ? tot[i] + ' no início' : tot[i] + (tot[i] === 1 ? ' novo' : ' novos')) + (part ? '*' : '') + '</text>';
       // ponto e etiqueta da base acumulada (etiqueta acima do ponto, nunca sobre a linha)
       var lbl = acc[i] + ' na base', lw = lbl.length * 6.4 + 14;
       s += '<circle class="acc-d" cx="' + pts[i][0] + '" cy="' + pts[i][1] + '" r="5"/>'

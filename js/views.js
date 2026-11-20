@@ -399,25 +399,25 @@
     // gráfico principal
     var tip = function (i) {
       var y = years[i], rows = CLI_CATS.map(function (c) { return [c[1], '<b>' + (y.v[c[0]] || 0) + '</b>', c[2]]; });
-      rows.push(['Total de novos', '<b>' + tot[i] + '</b>', 'var(--ink)']); rows.push(['Base acumulada', acc[i], 'var(--acc-c)']);
-      var p0 = i > 0 ? tot[i - 1] : 0, vs = i > 0 ? (y.partial ? fmtV(pct(tot[i], sumO(years[i - 1].ytd))) + ' sobre o mesmo período de ' + years[i - 1].y : fmtV(pct(tot[i], p0)) + ' sobre ' + years[i - 1].y) : 'primeiro ano';
-      return CA.tipMonth(String(y.y) + (y.partial ? ' · até ' + dm : ''), rows, vs);
+      rows.push([i === 0 ? 'Clientes no início' : 'Total de novos', '<b>' + tot[i] + '</b>', 'var(--ink)']); rows.push(['Base acumulada', acc[i], 'var(--acc-c)']);
+      var p0 = i > 0 ? tot[i - 1] : 0, vs = i > 0 ? (y.partial ? fmtV(pct(tot[i], sumO(years[i - 1].ytd))) + ' sobre o mesmo período de ' + years[i - 1].y : fmtV(pct(tot[i], p0)) + ' sobre ' + years[i - 1].y) : 'Primeiro ano da consultoria: sem ano anterior para comparar';
+      return CA.tipMonth(String(y.y) + (i === 0 ? ' · início' : '') + (y.partial ? ' · até ' + dm : ''), rows, vs);
     };
     out += '<section class="panel c12 cli-ev"><div class="panel-h"><div><h2>Novos clientes por ano</h2><p class="muted">Faixa de cima: quantos clientes a base já somava no fim de cada ano. Colunas: novos cadastros do ano, por tipo.</p></div></div><div class="panel-b">'
       + '<div class="hero-leg">' + CLI_CATS.map(function (c) { return '<span><i class="sq" style="background:' + c[2] + '"></i>' + c[1] + '</span>'; }).join('') + '<span><i class="ln-acc"></i>Base acumulada</span></div>'
       + CA.chart('cliYears', { kind: 'ystack', height: 380, cats: CLI_CATS, years: years, acc: acc, tip: tip, aria: 'Novos clientes por ano e base acumulada' }) + '</div></section>';
     // tabela ano a ano
-    var th = '<tr><th>Tipo</th>' + years.map(function (y) { return '<th class="r">' + y.y + (y.partial ? '*' : '') + '</th>'; }).join('') + (prev ? '<th class="r">' + prev.y + ' até ' + dm + '</th><th class="r">Variação no período</th>' : '') + '</tr>';
+    var th = '<tr><th>Tipo</th>' + years.map(function (y, i) { return '<th class="r">' + y.y + (i === 0 && years.length > 1 ? '<sup>i</sup>' : '') + (y.partial ? '*' : '') + '</th>'; }).join('') + (prev ? '<th class="r">' + prev.y + ' até ' + dm.slice(0, 5) + '</th><th class="r">Variação</th>' : '') + '</tr>';
     var rowsT = CLI_CATS.map(function (c) {
       var a1 = last.v[c[0]] || 0, b1 = prev ? prev.ytd[c[0]] || 0 : 0, vv = pct(a1, b1);
       return '<tr><td><i class="dotc" style="background:' + c[2] + '"></i>' + c[1] + '</td>' + years.map(function (y) { return '<td class="r num">' + (y.v[c[0]] || 0) + '</td>'; }).join('')
         + (prev ? '<td class="r num muted">' + b1 + '</td><td class="r num ' + (vv == null ? '' : vv >= 0 ? 'in' : 'out') + '">' + (b1 ? fmtV(vv) : a1 ? 'novo' : '—') + '</td>' : '') + '</tr>';
     }).join('');
-    rowsT += '<tr class="tot"><td>Total de novos</td>' + tot.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td class="r num">' + nPrevYtd + '</td><td class="r num ' + (vYtd == null ? '' : vYtd >= 0 ? 'in' : 'out') + '">' + fmtV(vYtd) + '</td>' : '') + '</tr>';
+    rowsT += '<tr class="tot"><td>Cadastrados no ano</td>' + tot.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td class="r num">' + nPrevYtd + '</td><td class="r num ' + (vYtd == null ? '' : vYtd >= 0 ? 'in' : 'out') + '">' + fmtV(vYtd) + '</td>' : '') + '</tr>';
     rowsT += '<tr><td>Crescimento sobre o ano anterior</td>' + tot.map(function (t, i) { if (!i) return '<td class="r muted">—</td>'; var x = years[i].partial ? pct(t, sumO(years[i - 1].ytd)) : pct(t, tot[i - 1]); return '<td class="r num ' + (x == null ? '' : x >= 0 ? 'in' : 'out') + '">' + fmtV(x) + (years[i].partial ? '<sup>†</sup>' : '') + '</td>'; }).join('') + (prev ? '<td></td><td></td>' : '') + '</tr>';
     rowsT += '<tr class="tot"><td>Base acumulada no fim do ano</td>' + acc.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td></td><td></td>' : '') + '</tr>';
     out += '<section class="panel c7"><div class="panel-h"><h2>Comparativo ano a ano</h2></div><div class="panel-b tbl-wrap"><table class="tbl cli-tb"><thead>' + th + '</thead><tbody>' + rowsT + '</tbody></table>'
-      + '<p class="muted tbl-note">* ' + anoAt + ' ainda em andamento (até ' + dm + '). † Comparado com o mesmo período do ano anterior, para ser justo.</p></div></section>';
+      + '<p class="muted tbl-note"><sup>i</sup> ' + years[0].y + ' é o início da consultoria: os cadastros desse ano formam a base inicial e não têm ano anterior para comparação. * ' + anoAt + ' ainda em andamento (até ' + dm + '). † Comparado com o mesmo período do ano anterior.</p></div></section>';
     // ritmo mensal acumulado por ano
     var MES = CA.MES3, series = years.slice(-3).map(function (y, k, arr) {
       var cum = 0, vals = [];
