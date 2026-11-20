@@ -1337,3 +1337,6 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 .cli-tb tr.sep td { border-top: 2px solid var(--line-strong); }
 @media (max-width: 1500px) { .cli-k6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .cli-k6 { grid-template-columns: 1fr 1fr; } }
+/* ícone de alerta centralizado (o estilo dos textos do aviso não deve atingir o círculo) */
+.na-h .na-ic { display: flex; align-items: center; justify-content: center; margin: 0; flex: none; }
+.na-h .na-ic svg { display: block; width: 18px; height: 18px; margin: 0; transform: translateY(-1px); }
