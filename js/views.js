@@ -5,7 +5,7 @@
 
   var AREAS = CA.AREAS = [
     { id: 'painel', label: 'Painel', icon: 'home', subs: [['visao', 'Visão geral']] },
-    { id: 'clientes', label: 'Clientes', icon: 'users', subs: [['base', 'Base de acadêmicos'], ['acessos', 'Acessos de portal']] },
+    { id: 'clientes', label: 'Clientes', icon: 'users', subs: [['base', 'Base de acadêmicos'], ['evolucao', 'Evolução da base'], ['acessos', 'Acessos de portal']] },
     { id: 'mensalidades', label: 'Mensalidades', icon: 'repeat', subs: [['situacao', 'Situação dos mensalistas'], ['competencia', 'Competência do mês'], ['pagamentos', 'Pagamentos recebidos']] },
     { id: 'servicos', label: 'Serviços', icon: 'file', subs: [['andamento', 'Em andamento'], ['receber', 'A receber'], ['concluidos', 'Concluídos'], ['catalogo', 'Catálogo']] },
     { id: 'financeiro', label: 'Financeiro', icon: 'chart', subs: [['resumo', 'Resultado do mês'], ['evolucao', 'Evolução desde o início'], ['extrato', 'Extrato'], ['despesas', 'Despesas'], ['anual', 'Tabela ano a ano']] },
@@ -361,6 +361,90 @@
     out += '</div>';
     return out;
   };
+
+  /* ---------- Clientes: evolução da base ano a ano (pela data de cadastro) ---------- */
+  var CLI_CATS = [['Cliente recorrente', 'Mensalistas', 'var(--c-green)'], ['Cliente não recorrente', 'Eventuais', 'var(--c-blue)'], ['Contato comercial', 'Contatos comerciais', 'var(--c-yellow)'], ['Recorrente arquivado', 'Mensalistas arquivados', 'var(--c-red)']];
+  VIEWS['clientes/evolucao'] = function (M) {
+    var hoje = M.hoje, anoAt = +hoje.slice(0, 4), md = hoje.slice(5);
+    var cat = function (t) { return CLI_CATS.some(function (c) { return c[0] === t; }) ? t : 'Cliente não recorrente'; };
+    var com = [], sem = [];
+    M.clients.forEach(function (c) { var d = CA.normDate(c.desde); (CA.isISO(d) ? com : sem).push({ c: c, d: d, t: cat(c.tipo) }); });
+    if (!com.length) return head('Evolução da base', 'Novos clientes por ano, pela data de cadastro') + empty('Nenhum cliente com data de cadastro', 'Preencha a data de cadastro dos clientes para ver a evolução.');
+    var ano0 = Math.min.apply(null, com.map(function (x) { return +x.d.slice(0, 4); }));
+    var years = [];
+    for (var y = ano0; y <= anoAt; y++) {
+      var v = {}, ytd = {};
+      com.forEach(function (x) { if (+x.d.slice(0, 4) !== y) return; v[x.t] = (v[x.t] || 0) + 1; if (x.d.slice(5) <= md) ytd[x.t] = (ytd[x.t] || 0) + 1; });
+      years.push({ y: y, v: v, ytd: ytd, partial: y === anoAt });
+    }
+    var sumO = function (o) { return Object.keys(o).reduce(function (t, k) { return t + o[k]; }, 0); };
+    var tot = years.map(function (y) { return sumO(y.v); }), acc = [], a = 0;
+    tot.forEach(function (t) { a += t; acc.push(a); });
+    var last = years[years.length - 1], prev = years[years.length - 2];
+    var nAt = tot[tot.length - 1], nPrevYtd = prev ? sumO(prev.ytd) : 0, nPrevTot = prev ? tot[tot.length - 2] : 0;
+    var pct = function (a, b) { return b ? Math.round((a - b) / b * 100) : null; };
+    var vYtd = pct(nAt, nPrevYtd), vTot = pct(nAt, nPrevTot);
+    var fmtV = function (x) { return x == null ? '—' : (x >= 0 ? '+' : '−') + Math.abs(x) + '%'; };
+    var dm = CA.dbr(hoje).slice(0, 5);
+    var ativos = M.clients.filter(function (c) { return c.tipo === 'Cliente recorrente'; }).length;
+    var out = head('Evolução da base', 'Novos clientes por ano, contados pela data de cadastro de cada um') + '<div class="grid">';
+    // indicadores
+    var kp = function (lb, vl, ft, cls) { return '<div class="ek ek-static' + (cls ? ' ' + cls : '') + '"><span class="ek-t"><span class="ek-l">' + lb + '</span><b class="num">' + vl + '</b><small>' + ft + '</small></span></div>'; };
+    out += '<div class="ek-row cli-k c12">'
+      + kp('Clientes na base', String(M.clients.length), com.length + ' com data de cadastro' + (sem.length ? ' · ' + sem.length + ' sem data' : ''))
+      + kp('Novos em ' + anoAt, String(nAt), 'até ' + dm + ' · ' + (prev ? nPrevYtd + ' no mesmo período de ' + prev.y : 'primeiro ano'))
+      + kp('Ritmo contra ' + (prev ? prev.y : 'o ano anterior'), fmtV(vYtd), prev ? 'mesmo período (01/01 a ' + dm + ')' : 'sem ano anterior', vYtd == null ? '' : vYtd >= 0 ? 'up' : 'down')
+      + kp('Mensalistas ativos', String(ativos), M.clients.filter(function (c) { return c.tipo === 'Recorrente arquivado'; }).length + ' arquivados no total')
+      + '</div>';
+    // gráfico principal
+    var tip = function (i) {
+      var y = years[i], rows = CLI_CATS.map(function (c) { return [c[1], '<b>' + (y.v[c[0]] || 0) + '</b>', c[2]]; });
+      rows.push(['Total de novos', '<b>' + tot[i] + '</b>', 'var(--ink)']); rows.push(['Base acumulada', acc[i], 'var(--c-violet)']);
+      var p0 = i > 0 ? tot[i - 1] : 0, vs = i > 0 ? (y.partial ? fmtV(pct(tot[i], sumO(years[i - 1].ytd))) + ' sobre o mesmo período de ' + years[i - 1].y : fmtV(pct(tot[i], p0)) + ' sobre ' + years[i - 1].y) : 'primeiro ano';
+      return CA.tipMonth(String(y.y) + (y.partial ? ' · até ' + dm : ''), rows, vs);
+    };
+    out += '<section class="panel c12 cli-ev"><div class="panel-h"><div><h2>Novos clientes por ano</h2><p class="muted">Colunas: novos cadastros por tipo. Linha roxa: tamanho da base acumulada (eixo da direita).</p></div></div><div class="panel-b">'
+      + '<div class="hero-leg">' + CLI_CATS.map(function (c) { return '<span><i class="sq" style="background:' + c[2] + '"></i>' + c[1] + '</span>'; }).join('') + '<span><i class="ln-acc"></i>Base acumulada</span></div>'
+      + CA.chart('cliYears', { kind: 'ystack', height: 320, cats: CLI_CATS, years: years, acc: acc, tip: tip, aria: 'Novos clientes por ano e base acumulada' }) + '</div></section>';
+    // tabela ano a ano
+    var th = '<tr><th>Tipo</th>' + years.map(function (y) { return '<th class="r">' + y.y + (y.partial ? '*' : '') + '</th>'; }).join('') + (prev ? '<th class="r">' + prev.y + ' até ' + dm + '</th><th class="r">Variação no período</th>' : '') + '</tr>';
+    var rowsT = CLI_CATS.map(function (c) {
+      var a1 = last.v[c[0]] || 0, b1 = prev ? prev.ytd[c[0]] || 0 : 0, vv = pct(a1, b1);
+      return '<tr><td><i class="dotc" style="background:' + c[2] + '"></i>' + c[1] + '</td>' + years.map(function (y) { return '<td class="r num">' + (y.v[c[0]] || 0) + '</td>'; }).join('')
+        + (prev ? '<td class="r num muted">' + b1 + '</td><td class="r num ' + (vv == null ? '' : vv >= 0 ? 'in' : 'out') + '">' + (b1 ? fmtV(vv) : a1 ? 'novo' : '—') + '</td>' : '') + '</tr>';
+    }).join('');
+    rowsT += '<tr class="tot"><td>Total de novos</td>' + tot.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td class="r num">' + nPrevYtd + '</td><td class="r num ' + (vYtd == null ? '' : vYtd >= 0 ? 'in' : 'out') + '">' + fmtV(vYtd) + '</td>' : '') + '</tr>';
+    rowsT += '<tr><td>Crescimento sobre o ano anterior</td>' + tot.map(function (t, i) { if (!i) return '<td class="r muted">—</td>'; var x = years[i].partial ? pct(t, sumO(years[i - 1].ytd)) : pct(t, tot[i - 1]); return '<td class="r num ' + (x == null ? '' : x >= 0 ? 'in' : 'out') + '">' + fmtV(x) + (years[i].partial ? '<sup>†</sup>' : '') + '</td>'; }).join('') + (prev ? '<td></td><td></td>' : '') + '</tr>';
+    rowsT += '<tr class="tot"><td>Base acumulada no fim do ano</td>' + acc.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td></td><td></td>' : '') + '</tr>';
+    out += '<section class="panel c7"><div class="panel-h"><h2>Comparativo ano a ano</h2></div><div class="panel-b tbl-wrap"><table class="tbl cli-tb"><thead>' + th + '</thead><tbody>' + rowsT + '</tbody></table>'
+      + '<p class="muted tbl-note">* ' + anoAt + ' ainda em andamento (até ' + dm + '). † Comparado com o mesmo período do ano anterior, para ser justo.</p></div></section>';
+    // ritmo mensal acumulado por ano
+    var MES = CA.MES3, series = years.slice(-3).map(function (y, k, arr) {
+      var cum = 0, vals = [];
+      for (var m = 1; m <= 12; m++) {
+        if (y.partial && m > +hoje.slice(5, 7)) { vals.push(null); continue; }
+        var mm = (m < 10 ? '0' : '') + m;
+        cum += com.filter(function (x) { return x.d.slice(0, 7) === y.y + '-' + mm; }).length; vals.push(cum);
+      }
+      var cols = ['var(--line-strong)', 'var(--c-sky)', 'var(--c-blue)'];
+      return { type: 'line', color: cols[cols.length - arr.length + k], name: String(y.y), values: vals };
+    });
+    out += '<section class="panel c5"><div class="panel-h"><div><h2>Ritmo de cadastros no ano</h2><p class="muted">Clientes novos acumulados mês a mês</p></div></div><div class="panel-b">'
+      + '<div class="hero-leg">' + series.map(function (sr) { return '<span><i class="ln-c" style="background:' + sr.color + '"></i>' + sr.name + '</span>'; }).join('') + '</div>'
+      + CA.chart('cliRitmo', { height: 230, labels: MES.slice(), ticks: function (i) { return MES[i]; }, yfmt: function (v) { return String(Math.round(v)); }, series: series,
+        tip: function (i) { return CA.tipMonth('Até o fim de ' + CA.MES[i].toLowerCase(), series.map(function (sr) { return [sr.name, sr.values[i] == null ? '—' : '<b>' + sr.values[i] + '</b>', sr.color]; }), ''); } }) + '</div></section>';
+    // leitura automática
+    var dicas = [];
+    if (prev) dicas.push(vYtd == null ? 'Primeiro ano com comparação disponível.' : vYtd >= 0 ? 'Em ' + anoAt + ' você cadastrou <b>' + nAt + '</b> clientes até ' + dm + ', <b>' + fmtV(vYtd) + '</b> em relação ao mesmo período de ' + prev.y + '. A base está crescendo.' : 'Em ' + anoAt + ' entraram <b>' + nAt + '</b> clientes até ' + dm + ', <b>' + fmtV(vYtd) + '</b> em relação ao mesmo período de ' + prev.y + '. Vale reforçar a captação.');
+    CLI_CATS.forEach(function (c) { if (!prev) return; var a1 = last.ytd[c[0]] || 0, b1 = prev.ytd[c[0]] || 0; if (b1 && a1 < b1) dicas.push(c[1] + ': <b>' + a1 + '</b> novos até agora contra <b>' + b1 + '</b> no mesmo período de ' + prev.y + ' (queda de ' + Math.abs(pct(a1, b1)) + '%).'); });
+    var arq = last.v['Recorrente arquivado'] || 0; if (arq) dicas.push('<b>' + arq + '</b> ' + (arq === 1 ? 'mensalista cadastrado' : 'mensalistas cadastrados') + ' em ' + anoAt + ' já ' + (arq === 1 ? 'foi arquivado' : 'foram arquivados') + ', o que indica cancelamento no mesmo ano.');
+    if (sem.length) dicas.push('<b>' + sem.length + '</b> ' + (sem.length === 1 ? 'cliente está' : 'clientes estão') + ' sem data de cadastro e não ' + (sem.length === 1 ? 'entra' : 'entram') + ' no gráfico: ' + sem.slice(0, 5).map(function (x) { return esc(x.c.nome); }).join(', ') + (sem.length > 5 ? '…' : '') + '. Preencha a data na ficha do cliente.');
+    var antigos = years.filter(function (y) { return !y.partial && !(y.v['Cliente não recorrente']); }).map(function (y) { return y.y; });
+    if (antigos.length && (last.v['Cliente não recorrente'] || 0) > 5) dicas.push('Não há eventuais cadastrados em ' + antigos.join(' e ') + ', embora houvesse receita de serviços nesse período. Se esses alunos não foram registrados no sistema, o crescimento de eventuais aparece maior do que foi de fato.');
+    out += '<div class="note info c12 cli-notes"><b>Leitura da base</b><ul>' + dicas.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul></div>';
+    return out + '</div>';
+  };
+
   function clientGroup(M, key, title, items, tone, q) {
     var rows = items.map(function (c) {
       var rc = M.rcByCid[c.id], nsv = M.services.filter(function (s) { return s.cid === c.id; }).length;

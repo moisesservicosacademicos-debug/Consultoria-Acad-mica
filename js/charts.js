@@ -72,7 +72,7 @@
   CA.mountCharts = function (root) {
     CA.fitTimeline(root);
     setTimeout(function () { CA.fitLists(root); }, 0);
-    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : cfg.kind === 'analise' ? drawAnalise : cfg.kind === 'mini' ? drawMini : draw)(box, cfg); });
+    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : cfg.kind === 'analise' ? drawAnalise : cfg.kind === 'mini' ? drawMini : cfg.kind === 'ystack' ? drawYStack : draw)(box, cfg); });
   };
   var rT;
   window.addEventListener('resize', function () { clearTimeout(rT); rT = setTimeout(function () { CA.mountCharts(); }, 150); });
@@ -296,6 +296,45 @@
     s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';
     box.innerHTML = s; hoverCols(box, n, L, st, cx, bw, cfg.tip);
   }
+
+  /* ===== Colunas empilhadas por ano (novos clientes por tipo) + linha da base acumulada ===== */
+  function drawYStack(box, cfg) {
+    var W = Math.max(280, box.clientWidth), H = Math.max(200, box.clientHeight || cfg.height || 300), mobile = W < 560;
+    var cats = cfg.cats, yrs = cfg.years, n = yrs.length, acc = cfg.acc;
+    var tot = yrs.map(function (y) { return cats.reduce(function (t, c) { return t + (y.v[c[0]] || 0); }, 0); });
+    var mxB = Math.max.apply(null, tot.concat([1])), mxL = Math.max.apply(null, acc.concat([1]));
+    var nkB = nice(mxB * 1.15, 0), nkL = nice(mxL * 1.1, 0);
+    var L = 34, R = 40, T = 26, B = 30;
+    var yB = function (v) { return T + (H - T - B) * (1 - v / (nkB.hi || 1)); }, yL = function (v) { return T + (H - T - B) * (1 - v / (nkL.hi || 1)); };
+    var st = (W - L - R) / n, cx = function (i) { return L + st * i + st / 2; }, bw = Math.min(st * .46, 74);
+    var s = '<svg class="ystk" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || '') + '">';
+    for (var v = 0; v <= nkB.hi + 1e-6; v += nkB.step) s += '<line class="gl' + (v === 0 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + yB(v) + '" y2="' + yB(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (yB(v) + 4) + '" text-anchor="end">' + v + '</text>';
+    for (var u = 0; u <= nkL.hi + 1e-6; u += nkL.step) s += '<text class="yt yr" x="' + (W - R + 8) + '" y="' + (yL(u) + 4) + '" text-anchor="start">' + u + '</text>';
+    yrs.forEach(function (y, i) {
+      var base = 0, x = cx(i) - bw / 2, part = y.partial;
+      s += '<g class="col" data-i="' + i + '">';
+      cats.forEach(function (c, k) {
+        var val = y.v[c[0]] || 0; if (!val) return;
+        var y1 = yB(base), y2 = yB(base + val); base += val;
+        var top = base === tot[i];
+        s += top ? '<path d="' + topRound(x, y2, bw, y1 - y2, 5) + '" style="fill:' + c[2] + '"' + (part ? ' class="part"' : '') + '/>' : '<rect x="' + x + '" y="' + y2 + '" width="' + bw + '" height="' + (y1 - y2) + '" style="fill:' + c[2] + '"' + (part ? ' class="part"' : '') + '/>';
+        if (y1 - y2 >= 16 && bw >= 26) s += '<text class="sv" x="' + cx(i) + '" y="' + ((y1 + y2) / 2 + 4) + '" text-anchor="middle">' + val + '</text>';
+      });
+      var ty = yB(tot[i]) - 8, accY = yL(acc[i]), clash = Math.abs(accY - (ty - 4)) < 16;
+      s += '<text class="tv" x="' + (clash ? cx(i) - bw / 2 - 7 : cx(i)) + '" y="' + (clash ? yB(tot[i]) + 12 : ty) + '" text-anchor="' + (clash ? 'end' : 'middle') + '">' + tot[i] + (part ? '*' : '') + ' novos</text>';
+      s += '<text class="xt' + (part ? ' now' : '') + '" x="' + cx(i) + '" y="' + (H - 9) + '" text-anchor="middle">' + y.y + (part ? ' (até hoje)' : '') + '</text></g>';
+    });
+    var pts = acc.map(function (a, i) { return [cx(i), yL(a)]; });
+    if (pts.length > 1) s += '<path class="acc" d="' + smooth(pts) + '"/>';
+    pts.forEach(function (p, i) {
+      var lx = p[0] + bw / 2 + 7, anc = 'start';
+      if (lx + 40 > W - R) { lx = p[0] - bw / 2 - 7; anc = 'end'; }
+      s += '<circle class="acc-d" cx="' + p[0] + '" cy="' + p[1] + '" r="4.5"/><text class="acc-t" x="' + lx + '" y="' + (p[1] + 4) + '" text-anchor="' + anc + '">base ' + acc[i] + '</text>';
+    });
+    s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';
+    box.innerHTML = s; hoverCols(box, n, L, st, cx, bw, cfg.tip);
+  }
+
   /* Mini colunas (despesas por mês) */
   function drawMini(box, cfg) {
     var W = Math.max(120, box.clientWidth), H = Math.max(60, box.clientHeight || 90), v = cfg.values, n = v.length;

@@ -1255,3 +1255,37 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 .np-on { background: var(--in-soft); }
 .np-on b i { width: 8px; height: 8px; border-radius: 50%; background: var(--in); display: inline-block; }
 .np-off { background: var(--surface-2); }
+
+/* =========== Clientes: evolução da base =========== */
+.ek-static { cursor: default; }
+.ek-static:hover { border-color: var(--line); box-shadow: var(--shadow); }
+.ek.up .ek-t b { color: var(--in); } .ek.down .ek-t b { color: var(--out); }
+.cli-k .ek-l::after { content: ''; }
+.cli-ev .panel-h p, .cli-notes + * p { margin: 2px 0 0; font-size: var(--fs-xs); }
+.panel-h p.muted { margin: 2px 0 0; font-size: var(--fs-xs); }
+.cli-ev .hero-leg, .c5 .hero-leg { margin: 4px 0 8px; }
+.hero-leg .ln-acc { width: 18px; height: 3px; border-radius: 2px; background: var(--c-violet); display: inline-block; position: relative; }
+.hero-leg .ln-acc::after { content: ''; position: absolute; left: 6px; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--surface); border: 2px solid var(--c-violet); box-sizing: border-box; }
+.hero-leg .ln-c { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+.chart-box .ystk .sv { fill: #fff; font-size: 11px; font-weight: 700; }
+.chart-box .ystk .tv { fill: var(--ink); font-size: 12.5px; font-weight: 800; }
+.chart-box .ystk .acc { fill: none; stroke: var(--c-violet); stroke-width: 2.4; stroke-linecap: round; }
+.chart-box .ystk .acc-d { fill: var(--surface); stroke: var(--c-violet); stroke-width: 2.4; }
+.chart-box .ystk .acc-t { fill: var(--c-violet); font-size: 11px; font-weight: 800; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+.chart-box .ystk .yr { fill: var(--c-violet); opacity: .8; }
+.chart-box .ystk .part { opacity: .78; }
+.chart-box .ystk .xt { font-size: 11.5px; font-weight: 600; }
+.chart-box .ystk .xt.now { fill: var(--ink); font-weight: 800; }
+.chart-box .ystk .col { transition: opacity .15s; }
+.chart-box .ystk.hov .col { opacity: .45; } .chart-box .ystk.hov .col.on { opacity: 1; }
+.cli-tb td, .cli-tb th { white-space: nowrap; }
+.cli-tb .dotc { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: 1px; }
+.cli-tb tr.tot td { font-weight: 700; background: var(--surface-2); }
+.cli-tb td.in { color: var(--in); font-weight: 700; } .cli-tb td.out { color: var(--out); font-weight: 700; }
+.cli-tb sup { font-size: .6rem; color: var(--muted); }
+.tbl-wrap { overflow-x: auto; }
+.tbl-note { font-size: var(--fs-xs); margin: 10px 2px 0; }
+.cli-notes ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.cli-notes li { line-height: 1.5; }
+@media (max-width: 1100px) { .c7, .c5 { grid-column: span 12; } }
+@media (max-width: 640px) { .cli-k { grid-template-columns: 1fr 1fr; } }
