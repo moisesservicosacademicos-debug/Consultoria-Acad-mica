@@ -363,88 +363,117 @@
   };
 
   /* ---------- Clientes: evolução da base ano a ano (pela data de cadastro) ---------- */
-  var CLI_CATS = [['Cliente recorrente', 'Mensalistas', 'var(--c-green)'], ['Cliente não recorrente', 'Eventuais', 'var(--c-blue)'], ['Contato comercial', 'Contatos comerciais', 'var(--c-yellow)'], ['Recorrente arquivado', 'Mensalistas arquivados', 'var(--c-red)']];
+  /* Clientes efetivos (já contrataram) x contatos comerciais (ainda não fecharam) */
+  var CLI_CATS = [['Cliente recorrente', 'Mensalistas', 'var(--c-green)'], ['Cliente não recorrente', 'Eventuais', 'var(--c-blue)'], ['Recorrente arquivado', 'Mensalistas arquivados', 'var(--c-red)']];
+  var CONTATO = 'Contato comercial';
   VIEWS['clientes/evolucao'] = function (M) {
     var hoje = M.hoje, anoAt = +hoje.slice(0, 4), md = hoje.slice(5);
-    var cat = function (t) { return CLI_CATS.some(function (c) { return c[0] === t; }) ? t : 'Cliente não recorrente'; };
+    var cat = function (t) { return t === CONTATO ? CONTATO : CLI_CATS.some(function (c) { return c[0] === t; }) ? t : 'Cliente não recorrente'; };
+    // pessoas únicas: mesmo ID de cliente não conta duas vezes; mesma chave/telefone vira alerta de possível duplicidade
+    var seen = {}, dupKey = {}, dups = [];
+    var crmIds = {}; (CA.S.data && Array.isArray(CA.S.data.crm) ? CA.S.data.crm : []).forEach(function (c) { if (c._clientId) crmIds[c._clientId] = 1; });
+    var firstDeal = {};
+    M.services.forEach(function (sv) { var d = CA.normDate(sv.dc); if (sv.cid && CA.isISO(d) && (!firstDeal[sv.cid] || d < firstDeal[sv.cid])) firstDeal[sv.cid] = d; });
+    M.fin.forEach(function (f) { var cid = f.r && f.r._clientId; if (cid && f.rec > 0 && (!firstDeal[cid] || f.data < firstDeal[cid])) firstDeal[cid] = f.data; });
     var com = [], sem = [];
-    M.clients.forEach(function (c) { var d = CA.normDate(c.desde); (CA.isISO(d) ? com : sem).push({ c: c, d: d, t: cat(c.tipo) }); });
+    M.clients.forEach(function (c) {
+      var uk = c.id || c.uid; if (seen[uk]) return; seen[uk] = 1;
+      var k2 = c.key || CA.telDig(c.tel); if (k2) { if (dupKey[k2]) dups.push(c.nome + ' / ' + dupKey[k2]); else dupKey[k2] = c.nome; }
+      var t = cat(c.tipo), d = CA.normDate(c.desde);
+      // contato que virou cliente: conta a partir da contratação efetiva, se for posterior ao cadastro
+      if (t !== CONTATO && c.id && crmIds[c.id] && firstDeal[c.id] && (!CA.isISO(d) || firstDeal[c.id] > d)) d = firstDeal[c.id];
+      (CA.isISO(d) ? com : sem).push({ c: c, d: d, t: t });
+    });
+    var isCli = function (x) { return x.t !== CONTATO; };
     if (!com.length) return head('Evolução da base', 'Novos clientes por ano, pela data de cadastro') + empty('Nenhum cliente com data de cadastro', 'Preencha a data de cadastro dos clientes para ver a evolução.');
     var ano0 = Math.min.apply(null, com.map(function (x) { return +x.d.slice(0, 4); }));
     var years = [];
     for (var y = ano0; y <= anoAt; y++) {
-      var v = {}, ytd = {};
-      com.forEach(function (x) { if (+x.d.slice(0, 4) !== y) return; v[x.t] = (v[x.t] || 0) + 1; if (x.d.slice(5) <= md) ytd[x.t] = (ytd[x.t] || 0) + 1; });
-      years.push({ y: y, v: v, ytd: ytd, partial: y === anoAt });
+      var v = {}, ytd = {}, ct = 0, ctY = 0;
+      com.forEach(function (x) {
+        if (+x.d.slice(0, 4) !== y) return;
+        if (!isCli(x)) { ct++; if (x.d.slice(5) <= md) ctY++; return; }
+        v[x.t] = (v[x.t] || 0) + 1; if (x.d.slice(5) <= md) ytd[x.t] = (ytd[x.t] || 0) + 1;
+      });
+      years.push({ y: y, v: v, ytd: ytd, ct: ct, ctY: ctY, partial: y === anoAt });
     }
     var sumO = function (o) { return Object.keys(o).reduce(function (t, k) { return t + o[k]; }, 0); };
-    var tot = years.map(function (y) { return sumO(y.v); }), acc = [], a = 0;
-    tot.forEach(function (t) { a += t; acc.push(a); });
+    var tot = years.map(function (y) { return sumO(y.v); }), acc = [], a = 0, accCom = [], b2 = 0;
+    tot.forEach(function (t, i) { a += t; acc.push(a); b2 += t + years[i].ct; accCom.push(b2); });
     var last = years[years.length - 1], prev = years[years.length - 2];
     var nAt = tot[tot.length - 1], nPrevYtd = prev ? sumO(prev.ytd) : 0, nPrevTot = prev ? tot[tot.length - 2] : 0;
     var pct = function (a, b) { return b ? Math.round((a - b) / b * 100) : null; };
-    var vYtd = pct(nAt, nPrevYtd), vTot = pct(nAt, nPrevTot);
+    var pct1 = function (a, b) { return b ? Math.round((a - b) / b * 1000) / 10 : null; };
+    var vYtd = pct(nAt, nPrevYtd), vYtd1 = pct1(nAt, nPrevYtd);
     var fmtV = function (x) { return x == null ? '—' : (x >= 0 ? '+' : '−') + Math.abs(x) + '%'; };
+    var fmtV1 = function (x) { return x == null ? '—' : (x >= 0 ? '+' : '−') + String(Math.abs(x)).replace('.', ',') + '%'; };
     var dm = CA.dbr(hoje).slice(0, 5);
+    var nCli = com.filter(isCli).length + sem.filter(isCli).length, nCt = com.length + sem.length - nCli;
     var ativos = M.clients.filter(function (c) { return c.tipo === 'Cliente recorrente'; }).length;
-    var out = head('Evolução da base', 'Novos clientes por ano, contados pela data de cadastro de cada um') + '<div class="grid">';
-    // indicadores
+    var out = head('Evolução da base', 'Clientes que já contrataram, por ano de entrada. Contatos comerciais sem fechamento aparecem à parte.') + '<div class="grid">';
     var kp = function (lb, vl, ft, cls) { return '<div class="ek ek-static' + (cls ? ' ' + cls : '') + '"><span class="ek-t"><span class="ek-l">' + lb + '</span><b class="num">' + vl + '</b><small>' + ft + '</small></span></div>'; };
-    out += '<div class="ek-row cli-k c12">'
-      + kp('Clientes na base', String(M.clients.length), com.length + ' com data de cadastro' + (sem.length ? ' · ' + sem.length + ' sem data' : ''))
-      + kp('Novos em ' + anoAt, String(nAt), 'até ' + dm + ' · ' + (prev ? nPrevYtd + ' no mesmo período de ' + prev.y : 'primeiro ano'))
-      + kp('Ritmo contra ' + (prev ? prev.y : 'o ano anterior'), fmtV(vYtd), prev ? 'mesmo período (01/01 a ' + dm + ')' : 'sem ano anterior', vYtd == null ? '' : vYtd >= 0 ? 'up' : 'down')
+    out += '<div class="ek-row cli-k cli-k6 c12">'
+      + kp('Clientes na base', String(nCli), 'já contrataram' + (sem.filter(isCli).length ? ' · ' + sem.filter(isCli).length + ' sem data' : ''))
+      + kp('Novos clientes em ' + anoAt, String(nAt), 'até ' + dm + (prev ? ' · ' + nPrevYtd + ' no mesmo período de ' + prev.y : ''))
+      + kp('Crescimento contra ' + (prev ? prev.y : 'o ano anterior'), fmtV1(vYtd1), prev ? 'novos clientes, 01/01 a ' + dm : 'sem ano anterior', vYtd == null ? '' : vYtd >= 0 ? 'up' : 'down')
+      + kp('Contatos sem fechamento', String(nCt), 'não entram como clientes', 'warn')
+      + kp('Base comercial total', String(nCli + nCt), nCli + ' clientes + ' + nCt + (nCt === 1 ? ' contato' : ' contatos'))
       + kp('Mensalistas ativos', String(ativos), M.clients.filter(function (c) { return c.tipo === 'Recorrente arquivado'; }).length + ' arquivados no total')
       + '</div>';
-    // gráfico principal
     var tip = function (i) {
       var y = years[i], rows = CLI_CATS.map(function (c) { return [c[1], '<b>' + (y.v[c[0]] || 0) + '</b>', c[2]]; });
-      rows.push([i === 0 ? 'Clientes no início' : 'Total de novos', '<b>' + tot[i] + '</b>', 'var(--ink)']); rows.push(['Base acumulada', acc[i], 'var(--acc-c)']);
-      var p0 = i > 0 ? tot[i - 1] : 0, vs = i > 0 ? (y.partial ? fmtV(pct(tot[i], sumO(years[i - 1].ytd))) + ' sobre o mesmo período de ' + years[i - 1].y : fmtV(pct(tot[i], p0)) + ' sobre ' + years[i - 1].y) : 'Primeiro ano da consultoria: sem ano anterior para comparar';
+      rows.push([i === 0 ? 'Clientes no início' : 'Novos clientes', '<b>' + tot[i] + '</b>', 'var(--ink)']);
+      rows.push(['Clientes acumulados', acc[i], 'var(--acc-c)']);
+      rows.push(['Contatos sem fechamento', y.ct, 'var(--c-yellow)']);
+      rows.push(['Base comercial total', accCom[i], 'var(--muted)']);
+      var vs = i > 0 ? (y.partial ? fmtV1(pct1(tot[i], sumO(years[i - 1].ytd))) + ' de novos clientes sobre o mesmo período de ' + years[i - 1].y : fmtV(pct(tot[i], tot[i - 1])) + ' de novos clientes sobre ' + years[i - 1].y) : 'Primeiro ano da consultoria: sem ano anterior para comparar';
       return CA.tipMonth(String(y.y) + (i === 0 ? ' · início' : '') + (y.partial ? ' · até ' + dm : ''), rows, vs);
     };
-    out += '<section class="panel c12 cli-ev"><div class="panel-h"><div><h2>Novos clientes por ano</h2><p class="muted">Faixa de cima: quantos clientes a base já somava no fim de cada ano. Colunas: novos cadastros do ano, por tipo.</p></div></div><div class="panel-b">'
-      + '<div class="hero-leg">' + CLI_CATS.map(function (c) { return '<span><i class="sq" style="background:' + c[2] + '"></i>' + c[1] + '</span>'; }).join('') + '<span><i class="ln-acc"></i>Base acumulada</span></div>'
-      + CA.chart('cliYears', { kind: 'ystack', height: 380, cats: CLI_CATS, years: years, acc: acc, tip: tip, aria: 'Novos clientes por ano e base acumulada' }) + '</div></section>';
-    // tabela ano a ano
-    var th = '<tr><th>Tipo</th>' + years.map(function (y, i) { return '<th class="r">' + y.y + (i === 0 && years.length > 1 ? '<sup>i</sup>' : '') + (y.partial ? '*' : '') + '</th>'; }).join('') + (prev ? '<th class="r">' + prev.y + ' até ' + dm.slice(0, 5) + '</th><th class="r">Variação</th>' : '') + '</tr>';
+    out += '<section class="panel c12 cli-ev"><div class="panel-h"><div><h2>Novos clientes por ano</h2><p class="muted">Faixa de cima: clientes acumulados no fim de cada ano. Colunas: clientes que entraram no ano, por tipo. Contatos comerciais sem fechamento ficam fora das colunas e da linha.</p></div></div><div class="panel-b">'
+      + '<div class="hero-leg">' + CLI_CATS.map(function (c) { return '<span><i class="sq" style="background:' + c[2] + '"></i>' + c[1] + '</span>'; }).join('') + '<span><i class="ln-acc"></i>Clientes acumulados</span><span class="ct-leg"><i class="ct-dot"></i>Contatos sem fechamento</span></div>'
+      + CA.chart('cliYears', { kind: 'ystack', height: 380, cats: CLI_CATS, years: years, acc: acc, contatos: years.map(function (y) { return y.ct; }), tip: tip, aria: 'Novos clientes por ano e clientes acumulados' }) + '</div></section>';
+    // tabela
+    var cols = years.length;
+    var th = '<tr><th>Tipo</th>' + years.map(function (y, i) { return '<th class="r">' + y.y + (i === 0 && cols > 1 ? '<sup>i</sup>' : '') + (y.partial ? '*' : '') + '</th>'; }).join('') + (prev ? '<th class="r">' + prev.y + ' até ' + dm + '</th><th class="r">Variação</th>' : '') + '</tr>';
+    var blank = prev ? '<td></td><td></td>' : '';
     var rowsT = CLI_CATS.map(function (c) {
       var a1 = last.v[c[0]] || 0, b1 = prev ? prev.ytd[c[0]] || 0 : 0, vv = pct(a1, b1);
       return '<tr><td><i class="dotc" style="background:' + c[2] + '"></i>' + c[1] + '</td>' + years.map(function (y) { return '<td class="r num">' + (y.v[c[0]] || 0) + '</td>'; }).join('')
         + (prev ? '<td class="r num muted">' + b1 + '</td><td class="r num ' + (vv == null ? '' : vv >= 0 ? 'in' : 'out') + '">' + (b1 ? fmtV(vv) : a1 ? 'novo' : '—') + '</td>' : '') + '</tr>';
     }).join('');
-    rowsT += '<tr class="tot"><td>Cadastrados no ano</td>' + tot.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td class="r num">' + nPrevYtd + '</td><td class="r num ' + (vYtd == null ? '' : vYtd >= 0 ? 'in' : 'out') + '">' + fmtV(vYtd) + '</td>' : '') + '</tr>';
-    rowsT += '<tr><td>Crescimento sobre o ano anterior</td>' + tot.map(function (t, i) { if (!i) return '<td class="r muted">—</td>'; var x = years[i].partial ? pct(t, sumO(years[i - 1].ytd)) : pct(t, tot[i - 1]); return '<td class="r num ' + (x == null ? '' : x >= 0 ? 'in' : 'out') + '">' + fmtV(x) + (years[i].partial ? '<sup>†</sup>' : '') + '</td>'; }).join('') + (prev ? '<td></td><td></td>' : '') + '</tr>';
-    rowsT += '<tr class="tot"><td>Base acumulada no fim do ano</td>' + acc.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td></td><td></td>' : '') + '</tr>';
+    rowsT += '<tr class="tot"><td>Novos clientes no ano</td>' + tot.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + (prev ? '<td class="r num">' + nPrevYtd + '</td><td class="r num ' + (vYtd == null ? '' : vYtd >= 0 ? 'in' : 'out') + '">' + fmtV1(vYtd1) + '</td>' : '') + '</tr>';
+    rowsT += '<tr><td>Crescimento sobre o ano anterior</td>' + tot.map(function (t, i) { if (!i) return '<td class="r muted">—</td>'; var x = years[i].partial ? pct(t, sumO(years[i - 1].ytd)) : pct(t, tot[i - 1]); return '<td class="r num ' + (x == null ? '' : x >= 0 ? 'in' : 'out') + '">' + fmtV(x) + (years[i].partial ? '<sup>†</sup>' : '') + '</td>'; }).join('') + blank + '</tr>';
+    rowsT += '<tr class="tot"><td>Clientes acumulados</td>' + acc.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + blank + '</tr>';
+    rowsT += '<tr class="sep"><td><i class="dotc" style="background:var(--c-yellow)"></i>Contatos sem fechamento</td>' + years.map(function (y) { return '<td class="r num">' + y.ct + '</td>'; }).join('') + (prev ? '<td class="r num muted">' + prev.ctY + '</td><td></td>' : '') + '</tr>';
+    rowsT += '<tr><td>Base comercial total (acumulada)</td>' + accCom.map(function (t) { return '<td class="r num">' + t + '</td>'; }).join('') + blank + '</tr>';
     out += '<section class="panel c7"><div class="panel-h"><h2>Comparativo ano a ano</h2></div><div class="panel-b tbl-wrap"><table class="tbl cli-tb"><thead>' + th + '</thead><tbody>' + rowsT + '</tbody></table>'
-      + '<p class="muted tbl-note"><sup>i</sup> ' + years[0].y + ' é o início da consultoria: os cadastros desse ano formam a base inicial e não têm ano anterior para comparação. * ' + anoAt + ' ainda em andamento (até ' + dm + '). † Comparado com o mesmo período do ano anterior.</p></div></section>';
-    // ritmo mensal acumulado por ano
-    var MES = CA.MES3, series = years.slice(-3).map(function (y, k, arr) {
+      + '<p class="muted tbl-note"><sup>i</sup> ' + years[0].y + ' é o início da consultoria: os cadastros desse ano formam a base inicial e não têm ano anterior para comparação. * ' + anoAt + ' ainda em andamento (até ' + dm + '). † Comparado com o mesmo período do ano anterior. Contatos sem fechamento não entram nas linhas de clientes.</p></div></section>';
+    // ritmo (só clientes)
+    var MES = CA.MES3, cli = com.filter(isCli), series = years.slice(-3).map(function (y, k, arr) {
       var cum = 0, vals = [];
       for (var m = 1; m <= 12; m++) {
         if (y.partial && m > +hoje.slice(5, 7)) { vals.push(null); continue; }
         var mm = (m < 10 ? '0' : '') + m;
-        cum += com.filter(function (x) { return x.d.slice(0, 7) === y.y + '-' + mm; }).length; vals.push(cum);
+        cum += cli.filter(function (x) { return x.d.slice(0, 7) === y.y + '-' + mm; }).length; vals.push(cum);
       }
-      var cols = ['var(--line-strong)', 'var(--c-sky)', 'var(--c-blue)'];
-      return { type: 'line', color: cols[cols.length - arr.length + k], name: String(y.y), values: vals };
+      var cl = ['var(--line-strong)', 'var(--c-sky)', 'var(--c-blue)'];
+      return { type: 'line', color: cl[cl.length - arr.length + k], name: String(y.y), values: vals };
     });
-    out += '<section class="panel c5"><div class="panel-h"><div><h2>Ritmo de cadastros no ano</h2><p class="muted">Clientes novos acumulados mês a mês</p></div></div><div class="panel-b">'
+    out += '<section class="panel c5"><div class="panel-h"><div><h2>Ritmo de novos clientes no ano</h2><p class="muted">Clientes que entraram, acumulados mês a mês</p></div></div><div class="panel-b">'
       + '<div class="hero-leg">' + series.map(function (sr) { return '<span><i class="ln-c" style="background:' + sr.color + '"></i>' + sr.name + '</span>'; }).join('') + '</div>'
       + CA.chart('cliRitmo', { height: 230, labels: MES.slice(), ticks: function (i) { return MES[i]; }, yfmt: function (v) { return String(Math.round(v)); }, series: series,
         tip: function (i) { return CA.tipMonth('Até o fim de ' + CA.MES[i].toLowerCase(), series.map(function (sr) { return [sr.name, sr.values[i] == null ? '—' : '<b>' + sr.values[i] + '</b>', sr.color]; }), ''); } }) + '</div></section>';
-    // leitura automática
+    // leitura
     var dicas = [];
-    if (prev) dicas.push(vYtd == null ? 'Primeiro ano com comparação disponível.' : vYtd >= 0 ? 'Em ' + anoAt + ' você cadastrou <b>' + nAt + '</b> clientes até ' + dm + ', <b>' + fmtV(vYtd) + '</b> em relação ao mesmo período de ' + prev.y + '. A base está crescendo.' : 'Em ' + anoAt + ' entraram <b>' + nAt + '</b> clientes até ' + dm + ', <b>' + fmtV(vYtd) + '</b> em relação ao mesmo período de ' + prev.y + '. Vale reforçar a captação.');
+    if (prev) dicas.push(vYtd == null ? 'Primeiro ano com comparação disponível.' : vYtd >= 0 ? 'Em ' + anoAt + ' entraram <b>' + nAt + '</b> novos clientes até ' + dm + ', <b>' + fmtV1(vYtd1) + '</b> em relação ao mesmo período de ' + prev.y + ' (' + nPrevYtd + '). A carteira está crescendo.' : 'Em ' + anoAt + ' entraram <b>' + nAt + '</b> novos clientes até ' + dm + ', <b>' + fmtV1(vYtd1) + '</b> em relação ao mesmo período de ' + prev.y + '. Vale reforçar a captação.');
+    if (nCt) dicas.push('<b>' + nCt + '</b> ' + (nCt === 1 ? 'contato comercial ainda não fechou' : 'contatos comerciais ainda não fecharam') + ' e não ' + (nCt === 1 ? 'é contado' : 'são contados') + ' como cliente. Ao fechar, mude o tipo na ficha: ' + (nCt === 1 ? 'ele passa' : 'eles passam') + ' a contar pela data da contratação.');
     CLI_CATS.forEach(function (c) { if (!prev) return; var a1 = last.ytd[c[0]] || 0, b1 = prev.ytd[c[0]] || 0; if (b1 && a1 < b1) dicas.push(c[1] + ': <b>' + a1 + '</b> novos até agora contra <b>' + b1 + '</b> no mesmo período de ' + prev.y + ' (queda de ' + Math.abs(pct(a1, b1)) + '%).'); });
     var arq = last.v['Recorrente arquivado'] || 0; if (arq) dicas.push('<b>' + arq + '</b> ' + (arq === 1 ? 'mensalista cadastrado' : 'mensalistas cadastrados') + ' em ' + anoAt + ' já ' + (arq === 1 ? 'foi arquivado' : 'foram arquivados') + ', o que indica cancelamento no mesmo ano.');
-    if (sem.length) dicas.push('<b>' + sem.length + '</b> ' + (sem.length === 1 ? 'cliente está' : 'clientes estão') + ' sem data de cadastro e não ' + (sem.length === 1 ? 'entra' : 'entram') + ' no gráfico: ' + sem.slice(0, 5).map(function (x) { return esc(x.c.nome); }).join(', ') + (sem.length > 5 ? '…' : '') + '. Preencha a data na ficha do cliente.');
-    var antigos = years.filter(function (y) { return !y.partial && !(y.v['Cliente não recorrente']); }).map(function (y) { return y.y; });
-    if (antigos.length && (last.v['Cliente não recorrente'] || 0) > 5) dicas.push('Não há eventuais cadastrados em ' + antigos.join(' e ') + ', embora houvesse receita de serviços nesse período. Se esses alunos não foram registrados no sistema, o crescimento de eventuais aparece maior do que foi de fato.');
+    if (sem.length) dicas.push('<b>' + sem.length + '</b> ' + (sem.length === 1 ? 'registro está' : 'registros estão') + ' sem data de cadastro e não ' + (sem.length === 1 ? 'entra' : 'entram') + ' no gráfico: ' + sem.slice(0, 5).map(function (x) { return esc(x.c.nome); }).join(', ') + (sem.length > 5 ? '…' : '') + '.');
+    if (dups.length) dicas.push('Possível cadastro duplicado (mesmo telefone): ' + dups.slice(0, 4).map(esc).join('; ') + '. Confira e, se for a mesma pessoa, mantenha um só cadastro.');
     out += '<div class="note info c12 cli-notes"><b>Leitura da base</b><ul>' + dicas.map(function (d) { return '<li>' + d + '</li>'; }).join('') + '</ul></div>';
     return out + '</div>';
   };
-
   function clientGroup(M, key, title, items, tone, q) {
     var rows = items.map(function (c) {
       var rc = M.rcByCid[c.id], nsv = M.services.filter(function (s) { return s.cid === c.id; }).length;

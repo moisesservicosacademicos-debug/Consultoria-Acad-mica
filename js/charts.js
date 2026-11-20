@@ -333,6 +333,8 @@
       s += '<circle class="acc-d" cx="' + pts[i][0] + '" cy="' + pts[i][1] + '" r="5"/>'
         + '<rect class="acc-p" x="' + (pts[i][0] - lw / 2) + '" y="' + (pts[i][1] - 27) + '" width="' + lw + '" height="18" rx="9"/>'
         + '<text class="acc-t" x="' + pts[i][0] + '" y="' + (pts[i][1] - 14) + '" text-anchor="middle">' + lbl + '</text>';
+      var ctn = cfg.contatos ? cfg.contatos[i] : 0;
+      if (ctn) s += '<g class="ct-mk"><circle cx="' + (cx(i) + bw / 2 + 12) + '" cy="' + (yB(0) - 8) + '" r="4"/><text x="' + (cx(i) + bw / 2 + 20) + '" y="' + (yB(0) - 4) + '">' + ctn + (ctn === 1 ? ' contato' : ' contatos') + '</text></g>';
       s += '<text class="xt' + (part ? ' now' : '') + '" x="' + cx(i) + '" y="' + (H - 9) + '" text-anchor="middle">' + y.y + (part ? ' (até hoje)' : '') + '</text></g>';
     });
     s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + H + '" fill="transparent"/></svg><div class="tip" hidden></div>';
