@@ -71,7 +71,7 @@
   };
   CA.mountCharts = function (root) {
     CA.fitTimeline(root);
-    setTimeout(function () { CA.fitLists(root); }, 0);
+    CA.fitLists(root); // síncrono: evita itens aparecerem e sumirem (piscada)
     (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : cfg.kind === 'analise' ? drawAnalise : cfg.kind === 'mini' ? drawMini : cfg.kind === 'ystack' ? drawYStack : draw)(box, cfg); });
   };
   var rT;

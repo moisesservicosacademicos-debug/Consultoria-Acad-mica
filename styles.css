@@ -1303,3 +1303,7 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 [data-theme="dark"] .chart-box .ystk .acc-t { fill: #0D1424; }
 .chart-box .ystk .guide-v { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 4; }
 .cli-tb th, .cli-tb td { padding-left: 10px; padding-right: 10px; }
+/* Troca de período suave: só os gráficos e números mudam com um leve esmaecer */
+@keyframes softIn { from { opacity: .35; } to { opacity: 1; } }
+.soft-swap .chart-box svg, .soft-swap .el-list, .soft-swap .do-w, .soft-swap .an-box b, .soft-swap .de-top b { animation: softIn .32s ease-out; }
+@media (prefers-reduced-motion: reduce) { .soft-swap * { animation: none !important; } }

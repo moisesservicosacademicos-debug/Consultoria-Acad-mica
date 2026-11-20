@@ -58,7 +58,13 @@
       case 'tlMore': showMoreTimeline(); break;
       case 'pnDre': CA.painelDrawer('dre'); break;
       case 'pnTk': CA.painelDrawer('tk'); break;
-      case 'heroN': CA.S.ui.heroN = +g('data-k'); CA.render(); break;
+      case 'heroN':
+        if (CA.S.ui.heroN === +g('data-k') || (!CA.S.ui.heroN && +g('data-k') === 12)) break;
+        CA.S.ui.heroN = +g('data-k');
+        document.documentElement.classList.add('soft-swap');
+        CA.render();
+        requestAnimationFrame(function () { setTimeout(function () { document.documentElement.classList.remove('soft-swap'); }, 400); });
+        break;
       case 'yoyMetric': CA.S.ui.yoyMetric = g('data-k'); CA.render(); break;
     }
   };
