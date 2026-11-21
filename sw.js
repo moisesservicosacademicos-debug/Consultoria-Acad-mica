@@ -7,16 +7,24 @@ self.addEventListener('push', function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = { title: 'Consultoria Acadêmica', body: e.data ? e.data.text() : '' }; }
   var title = d.title || 'Consultoria Acadêmica';
-  e.waitUntil(self.registration.showNotification(title, {
-    body: d.body || '',
-    tag: d.tag || 'consultoria',
-    renotify: true,
-    requireInteraction: !!d.urgent,
-    icon: '/assets/icon-192.png',
-    badge: '/assets/badge-96.png',
-    lang: 'pt-BR',
-    data: { url: d.url || '/#/painel' }
-  }));
+  var msg = { type: 'ca-push', title: title, body: d.body || '', tag: d.tag || 'consultoria', url: d.url || '/#/painel' };
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(title, {
+      body: d.body || '',
+      tag: d.tag || 'consultoria',
+      renotify: true,
+      requireInteraction: !!d.urgent,
+      icon: '/assets/icon-192.png',
+      badge: '/assets/badge-96.png',
+      lang: 'pt-BR',
+      data: { url: d.url || '/#/painel' }
+    }),
+    // Avisa também as janelas abertas do sistema: confirma o teste e mostra o alerta
+    // dentro da tela mesmo quando o Windows/Mac segura o balão de notificação.
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      list.forEach(function (c) { try { c.postMessage(msg); } catch (x) {} });
+    })
+  ]));
 });
 
 self.addEventListener('notificationclick', function (e) {

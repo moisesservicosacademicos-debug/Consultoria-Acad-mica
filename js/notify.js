@@ -51,67 +51,122 @@
   }
 
 
-  /* ---------- Notificações no celular (Web Push) ---------- */
+  /* ---------- Notificações do aparelho (Web Push): celular e computador ---------- */
   var VAPID = 'BLpGy8MXTFSiiZUAyJIRj5o6wVvl0-hjojvHI7QwCS_UQDrGFcu7a_Yq3hugYZtnocaXryf-5jk48i60v5wp1i8';
-  var P = CA.push = { sub: null, busy: false, synced: false };
+  var OFF_KEY = 'ca2_push_off';
+  var P = CA.push = { sub: null, busy: false, synced: false, diag: null };
   P.suportado = function () { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; };
   P.ios = function () { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); };
+  P.movel = function () { return P.ios() || /android|mobile/i.test(navigator.userAgent); };
+  P.mac = function () { return !P.ios() && /mac/i.test(navigator.platform || navigator.userAgent); };
   P.standalone = function () { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; };
   function b64(u) { var p = '='.repeat((4 - u.length % 4) % 4), s = atob((u + p).replace(/-/g, '+').replace(/_/g, '/')), a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a; }
   function aparelho() { var u = navigator.userAgent; return (/iphone/i.test(u) ? 'iPhone' : /ipad/i.test(u) ? 'iPad' : /android/i.test(u) ? 'Android' : /windows/i.test(u) ? 'Windows' : /mac/i.test(u) ? 'Mac' : 'Navegador') + (P.standalone() ? ' (app)' : ''); }
-  var swReg = null;
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+  var ondeTxt = function () { return P.movel() ? 'celular' : 'computador'; };
+
+  var swReg = null, esperaTeste = null;
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function (r) { swReg = r; return r.pushManager && r.pushManager.getSubscription(); }).then(function (s) { P.sub = s || null; refreshPainel(); }).catch(function () {});
+    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(function (r) {
+      swReg = r; try { r.update(); } catch (e) {}
+      return r.pushManager && r.pushManager.getSubscription();
+    }).then(function (s) { P.sub = s || null; refreshPainel(); }).catch(function () {});
+    // Mensagem do service worker a cada aviso recebido por este navegador
+    try { navigator.serviceWorker.startMessages(); } catch (e) {}
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      var d = e.data || {}; if (d.type !== 'ca-push') return;
+      if (d.tag === 'teste') { if (esperaTeste) esperaTeste(true); return; }
+      try { CA.atualizarNotificacoes(); } catch (x) {}
+      if (document.visibilityState === 'visible') CA.toast('🔔 ' + d.title);
+    });
   }
+  async function registro() { return swReg || await navigator.serviceWorker.ready; }
   async function salvar(sub) {
     var j = sub.toJSON(), sb = CA.api && CA.api.sb; if (!sb) throw new Error('Entre no sistema antes de ativar.');
     var r = await sb.from('push_subscriptions').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, device: aparelho() }, { onConflict: 'endpoint' });
     if (r.error) throw new Error(r.error.message);
   }
+  async function inscrever(nova) {
+    var reg = await registro(), s = await reg.pushManager.getSubscription();
+    if (s && nova) { try { await s.unsubscribe(); } catch (e) {} s = null; }
+    if (!s) s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
+    await salvar(s); P.sub = s; return s;
+  }
+  /* Ao entrar no sistema: se a permissão já foi dada neste aparelho, os avisos ficam
+     ativos sozinhos (inscreve de novo se a inscrição tiver se perdido), sem clicar em nada. */
   P.sync = async function () {
-    if (P.synced || !P.suportado() || Notification.permission !== 'granted' || !CA.api) return;
+    if (P.synced || !P.suportado() || Notification.permission !== 'granted' || !CA.api || lsGet(OFF_KEY) === '1') return;
     P.synced = true;
-    try { var reg = swReg || await navigator.serviceWorker.ready, s = await reg.pushManager.getSubscription(); if (s) { P.sub = s; await salvar(s); } } catch (e) { P.synced = false; }
+    try { await inscrever(false); refreshPainel(); } catch (e) { P.synced = false; }
   };
   P.ativar = async function () {
     if (!P.suportado()) throw new Error(P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início e ative por lá.' : 'Este navegador não recebe notificações.');
     var perm = await Notification.requestPermission();
-    if (perm !== 'granted') throw new Error('Permissão negada. Libere as notificações do sistema nos ajustes do celular e tente de novo.');
-    var reg = swReg || await navigator.serviceWorker.ready;
-    var s = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
-    await salvar(s); P.sub = s;
-    await P.testar();
+    if (perm !== 'granted') throw new Error(P.movel() ? 'Permissão negada. Libere as notificações do sistema nos ajustes do celular e tente de novo.' : 'Permissão negada. Clique no cadeado ao lado do endereço do site › Notificações › Permitir e tente de novo.');
+    lsSet(OFF_KEY, null);
+    await inscrever(false); P.synced = true;
+    return P.testar();
   };
+  function enviarTeste() {
+    return CA.api.sb.functions.invoke('push-notify', { body: { mode: 'test', endpoint: P.sub.endpoint } }).then(function (r) {
+      if (r.error) throw new Error('Não foi possível enviar o teste agora. Confira a internet e tente de novo.');
+      if (r.data && r.data.ok === 0) throw new Error('O servidor não conseguiu entregar o aviso a este aparelho.');
+    });
+  }
+  function aguardarChegada(ms) {
+    return new Promise(function (res) {
+      var t = setTimeout(function () { esperaTeste = null; res(false); }, ms);
+      esperaTeste = function (v) { clearTimeout(t); esperaTeste = null; res(v); };
+    });
+  }
+  /* Envia o teste e confere se ele chegou de fato a este navegador.
+     Retorna 'ok' quando chegou; se não chegar, refaz a inscrição uma vez e tenta de novo. */
   P.testar = async function () {
     if (!P.sub) throw new Error('Ative as notificações primeiro.');
-    var r = await CA.api.sb.functions.invoke('push-notify', { body: { mode: 'test', endpoint: P.sub.endpoint } });
-    if (r.error) throw new Error('Não foi possível enviar o teste agora.');
-    if (r.data && r.data.ok === 0) throw new Error('O aviso de teste não chegou ao aparelho. Desative e ative de novo.');
+    var chegou = aguardarChegada(12000);
+    await enviarTeste();
+    if (await chegou) { P.diag = 'ok'; return 'ok'; }
+    await inscrever(true);
+    chegou = aguardarChegada(12000);
+    await enviarTeste();
+    if (await chegou) { P.diag = 'ok'; return 'ok'; }
+    P.diag = 'falhou';
+    throw new Error('O aviso de teste não chegou a este navegador. Feche e abra o navegador e tente de novo.');
   };
   P.desativar = async function () {
+    lsSet(OFF_KEY, '1'); P.diag = null;
     if (!P.sub) return;
     var ep = P.sub.endpoint;
     try { await P.sub.unsubscribe(); } catch (e) {}
     if (CA.api) await CA.api.sb.from('push_subscriptions').delete().eq('endpoint', ep);
     P.sub = null;
   };
+  function ajudaSO() {
+    if (P.movel()) return 'Não viu o aviso? Confira se as notificações do navegador estão liberadas nos ajustes do celular e se o modo Não perturbe está desligado.';
+    if (P.mac()) return 'Não viu o balão no canto da tela? No Mac: Ajustes do Sistema › Notificações › Google Chrome › Permitir notificações, e desligue o Foco/Não perturbe.';
+    return 'Não viu o balão no canto da tela? No Windows: Configurações › Sistema › Notificações › ative "Notificações" e "Google Chrome", e desligue o "Não perturbe". O Chrome precisa estar aberto (pode ser minimizado).';
+  }
   function pushBox() {
+    var onde = ondeTxt();
     if (!P.suportado()) {
-      return '<div class="np np-off"><b>Notificações no celular</b><span>' + (P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início para ativar os avisos.' : 'Este navegador não recebe notificações. Use o Chrome no Android ou o ícone da tela de início no iPhone.') + '</span></div>';
+      return '<div class="np np-off"><b>Notificações no ' + onde + '</b><span>' + (P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início para ativar os avisos.' : 'Este navegador não recebe notificações. Use o Chrome ou o Edge no computador, o Chrome no Android ou o ícone da tela de início no iPhone.') + '</span></div>';
     }
-    if (Notification.permission === 'denied') return '<div class="np np-off"><b>Notificações bloqueadas neste aparelho</b><span>Libere nos ajustes do celular (Notificações › Consultoria) e toque em Ativar de novo.</span><button type="button" class="btn sm" data-np="on">Tentar de novo</button></div>';
-    if (P.sub) return '<div class="np np-on"><b><i></i>Avisos ativados neste aparelho</b><span>Você recebe os alertas mesmo com o sistema fechado.</span><div><button type="button" class="btn sm" data-np="test">Enviar teste</button><button type="button" class="btn sm ghost" data-np="off">Desativar</button></div></div>';
-    return '<div class="np"><b>Receba os alertas no celular</b><span>Avisos de entregas, provas e agendamentos chegam mesmo com o sistema fechado.</span><button type="button" class="btn sm primary" data-np="on">Ativar neste aparelho</button></div>';
+    if (Notification.permission === 'denied') return '<div class="np np-off"><b>Notificações bloqueadas neste ' + onde + '</b><span>' + (P.movel() ? 'Libere nos ajustes do celular (Notificações › Consultoria) e toque em Tentar de novo.' : 'Clique no cadeado ao lado do endereço do site › Notificações › Permitir. Depois recarregue a página.') + '</span><button type="button" class="btn sm" data-np="on">Tentar de novo</button></div>';
+    if (P.sub) return '<div class="np np-on"><b><i></i>Avisos ativos neste ' + onde + '</b><span>' + (P.diag === 'ok' ? 'Teste recebido por este navegador. ' + ajudaSO() : 'Os alertas chegam mesmo com o sistema fechado' + (P.movel() ? '.' : ', desde que o navegador esteja aberto (pode ser minimizado).')) + '</span><div><button type="button" class="btn sm" data-np="test">Enviar teste</button><button type="button" class="btn sm ghost" data-np="off">Desativar</button></div></div>';
+    return '<div class="np"><b>Receba os alertas neste ' + onde + '</b><span>Avisos de entregas, provas e agendamentos aparecem mesmo com o sistema fechado. O navegador pede sua permissão só uma vez; depois fica ativo sozinho.</span><button type="button" class="btn sm primary" data-np="on">Ativar neste ' + onde + '</button></div>';
   }
   function refreshPainel() { var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(itens()); }
   document.addEventListener('click', async function (e) {
     var b = e.target.closest('[data-np]'); if (!b || P.busy) return;
     e.stopPropagation();
-    var k = b.getAttribute('data-np'); P.busy = true; b.disabled = true; var t0 = b.textContent; b.textContent = 'Aguarde…';
+    var k = b.getAttribute('data-np'); P.busy = true; b.disabled = true; var t0 = b.textContent; b.textContent = k === 'off' ? 'Aguarde…' : 'Testando…';
     try {
-      if (k === 'on') { await P.ativar(); CA.toast('Pronto! Enviamos um aviso de teste para este aparelho.'); }
-      else if (k === 'test') { await P.testar(); CA.toast('Aviso de teste enviado. Deve chegar em alguns segundos.'); }
-      else if (k === 'off') { await P.desativar(); CA.toast('Avisos desativados neste aparelho.'); }
+      if (k === 'on' || k === 'test') {
+        if (k === 'on') await P.ativar(); else await P.testar();
+        CA.toast(P.movel() ? 'Teste recebido. O aviso deve aparecer na tela do celular.' : 'Teste recebido pelo navegador. O balão deve aparecer no canto da tela.');
+      }
+      else if (k === 'off') { await P.desativar(); CA.toast('Avisos desativados neste ' + ondeTxt() + '.'); }
     } catch (err) { CA.toast(err.message || String(err), 'err'); }
     P.busy = false; b.disabled = false; b.textContent = t0; refreshPainel();
   }, true);
