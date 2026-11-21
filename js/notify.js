@@ -66,12 +66,24 @@
   function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
   var ondeTxt = function () { return P.movel() ? 'celular' : 'computador'; };
 
-  var swReg = null, esperaTeste = null;
+  var VERSAO = '3.3.8';
+  var swReg = null, swErro = null, esperaTeste = null;
+  /* Nenhuma etapa pode travar o botão: tudo tem tempo-limite e mensagem clara. */
+  function limite(pr, ms, msg) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error(msg)); }, ms);
+      Promise.resolve(pr).then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+  function registrarSW() {
+    // caminho relativo: funciona no endereço principal e em cópias publicadas numa subpasta
+    return navigator.serviceWorker.register(new URL('sw.js', location.href).href, { scope: './', updateViaCache: 'none' }).then(function (r) {
+      swReg = r; swErro = null; try { r.update(); } catch (e) {} return r;
+    }, function (e) { swErro = e; throw e; });
+  }
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(function (r) {
-      swReg = r; try { r.update(); } catch (e) {}
-      return r.pushManager && r.pushManager.getSubscription();
-    }).then(function (s) { P.sub = s || null; refreshPainel(); }).catch(function () {});
+    registrarSW().then(function (r) { return r.pushManager && r.pushManager.getSubscription(); })
+      .then(function (s) { P.sub = s || null; refreshPainel(); }).catch(function () {});
     // Mensagem do service worker a cada aviso recebido por este navegador
     try { navigator.serviceWorker.startMessages(); } catch (e) {}
     navigator.serviceWorker.addEventListener('message', function (e) {
@@ -81,7 +93,16 @@
       if (document.visibilityState === 'visible') CA.toast('🔔 ' + d.title);
     });
   }
-  async function registro() { return swReg || await navigator.serviceWorker.ready; }
+  async function registro() {
+    if (swReg && swReg.active) return swReg;
+    var r = swReg || await limite(registrarSW(), 15000, 'O navegador não carregou o serviço de avisos. Recarregue a página (Ctrl+F5) e tente de novo.');
+    if (r.active) return r;
+    await limite(new Promise(function (ok) {
+      var w = r.installing || r.waiting; if (!w) return ok();
+      w.addEventListener('statechange', function () { if (w.state === 'activated') ok(); });
+    }), 15000, 'O serviço de avisos não terminou de iniciar. Recarregue a página (Ctrl+F5) e tente de novo.');
+    return r;
+  }
   async function salvar(sub) {
     var j = sub.toJSON(), sb = CA.api && CA.api.sb; if (!sb) throw new Error('Entre no sistema antes de ativar.');
     var r = await sb.from('push_subscriptions').upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, device: aparelho() }, { onConflict: 'endpoint' });
@@ -90,8 +111,8 @@
   async function inscrever(nova) {
     var reg = await registro(), s = await reg.pushManager.getSubscription();
     if (s && nova) { try { await s.unsubscribe(); } catch (e) {} s = null; }
-    if (!s) s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
-    await salvar(s); P.sub = s; return s;
+    if (!s) s = await limite(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) }), 20000, 'O navegador não conseguiu se registrar no serviço de avisos. Confira a internet e tente de novo.');
+    await limite(salvar(s), 15000, 'Sem resposta da base ao salvar este aparelho. Confira a internet e tente de novo.'); P.sub = s; return s;
   }
   /* Ao entrar no sistema: se a permissão já foi dada neste aparelho, os avisos ficam
      ativos sozinhos (inscreve de novo se a inscrição tiver se perdido), sem clicar em nada. */
@@ -102,14 +123,15 @@
   };
   P.ativar = async function () {
     if (!P.suportado()) throw new Error(P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início e ative por lá.' : 'Este navegador não recebe notificações.');
-    var perm = await Notification.requestPermission();
+    var perm = Notification.permission === 'granted' ? 'granted' : await limite(Notification.requestPermission(), 60000,
+      P.movel() ? 'O pedido de permissão não foi respondido. Toque em Ativar de novo e escolha Permitir.' : 'O Chrome escondeu o pedido de permissão. Clique no sino riscado (ou no cadeado) na barra de endereço › Notificações › Permitir, e clique em Ativar de novo.');
     if (perm !== 'granted') throw new Error(P.movel() ? 'Permissão negada. Libere as notificações do sistema nos ajustes do celular e tente de novo.' : 'Permissão negada. Clique no cadeado ao lado do endereço do site › Notificações › Permitir e tente de novo.');
     lsSet(OFF_KEY, null);
     await inscrever(false); P.synced = true;
     return P.testar();
   };
   function enviarTeste() {
-    return CA.api.sb.functions.invoke('push-notify', { body: { mode: 'test', endpoint: P.sub.endpoint } }).then(function (r) {
+    return limite(CA.api.sb.functions.invoke('push-notify', { body: { mode: 'test', endpoint: P.sub.endpoint } }), 20000, 'O servidor de avisos não respondeu. Confira a internet e tente de novo.').then(function (r) {
       if (r.error) throw new Error('Não foi possível enviar o teste agora. Confira a internet e tente de novo.');
       if (r.data && r.data.ok === 0) throw new Error('O servidor não conseguiu entregar o aviso a este aparelho.');
     });
@@ -160,7 +182,7 @@
   document.addEventListener('click', async function (e) {
     var b = e.target.closest('[data-np]'); if (!b || P.busy) return;
     e.stopPropagation();
-    var k = b.getAttribute('data-np'); P.busy = true; b.disabled = true; var t0 = b.textContent; b.textContent = k === 'off' ? 'Aguarde…' : 'Testando…';
+    var k = b.getAttribute('data-np'); P.busy = true; b.disabled = true; var t0 = b.textContent; b.textContent = k === 'off' ? 'Aguarde…' : k === 'on' ? 'Ativando…' : 'Testando…';
     try {
       if (k === 'on' || k === 'test') {
         if (k === 'on') await P.ativar(); else await P.testar();
@@ -177,7 +199,7 @@
     return pushBox() + '<div class="nt-h"><b>Notificações</b><span>' + (L.length ? L.length + (L.length === 1 ? ' pendência' : ' pendências') + (atr ? ' · ' + atr + ' em atraso' : '') : 'nenhuma pendência') + '</span></div>'
       + (L.length ? '<div class="nt-l">' + L.map(function (n) { return linha(n); }).join('') + '</div>'
         : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova ou trabalho agendado.</span></div>')
-      + '<div class="nt-f"><span>Avisos de entregas e agendamentos com prazo em até 2 dias. Somem ao marcar como resolvido.</span><a href="#/agenda/prazos" data-nclose>Ver agenda</a></div>';
+      + '<div class="nt-f"><span>Avisos de entregas e agendamentos com prazo em até 2 dias. Somem ao marcar como resolvido. <small class="nt-v">v' + VERSAO + '</small></span><a href="#/agenda/prazos" data-nclose>Ver agenda</a></div>';
   }
   function abrirPainel() {
     var p = $('notifPanel'), b = $('btnNotif');
