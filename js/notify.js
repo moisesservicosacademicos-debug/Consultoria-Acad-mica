@@ -41,14 +41,29 @@
     prova: '<svg viewBox="0 0 24 24"><path d="M9 11l2 2 4-4"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg>',
     agenda: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
   };
-  function linha(n, compacta) {
-    var acao = n.tipo === 'entrega' && n.abrir[0] === 'sv' ? 'Concluir' : 'Resolver';
-    return '<div class="nt-i ' + sev(n) + '"><span class="nt-ic">' + ICO[n.tipo] + '</span><div class="nt-t">'
-      + '<span class="nt-k">' + rotulo(n) + ' · <b>' + quando(n) + '</b></span>'
-      + '<b class="nt-n">' + esc(n.titulo) + '</b><small>' + esc(n.nome) + ' · ' + CA.dbr(n.data) + (n.cod ? ' · ' + esc(n.cod) : '') + '</small>'
-      + (compacta ? '' : '<div class="nt-a"><button type="button" class="btn sm" data-nact="' + n.abrir[0] + '" data-uid="' + esc(n.abrir[1]) + '">Abrir</button><button type="button" class="btn sm primary" data-nact="' + n.resolver[0] + '" data-uid="' + esc(n.resolver[1]) + '">' + acao + '</button></div>')
-      + '</div></div>';
+  function quandoCurto(n) {
+    if (n.dias < 0) return 'Atrasado há ' + (-n.dias) + (n.dias === -1 ? ' dia' : ' dias');
+    if (n.dias === 0) return 'Vence hoje' + (n.hora ? ' · ' + esc(n.hora) : '');
+    if (n.dias === 1) return 'Vence amanhã' + (n.hora ? ' · ' + esc(n.hora) : '');
+    return 'Vence em ' + n.dias + ' dias';
   }
+  function linha(n, compacta) {
+    if (compacta) {
+      return '<div class="nt-i ' + sev(n) + '"><span class="nt-ic">' + ICO[n.tipo] + '</span><div class="nt-t">'
+        + '<span class="nt-k">' + rotulo(n) + ' · <b>' + quando(n) + '</b></span>'
+        + '<b class="nt-n">' + esc(n.titulo) + '</b><small>' + esc(n.nome) + ' · ' + CA.dbr(n.data) + (n.cod ? ' · ' + esc(n.cod) : '') + '</small></div></div>';
+    }
+    var acao = n.tipo === 'entrega' && n.abrir[0] === 'sv' ? 'Concluir' : 'Resolver';
+    var ini = (String(n.nome || '?').trim().charAt(0) || '?').toUpperCase();
+    return '<article class="nc ' + sev(n) + '">'
+      + '<div class="nc-top"><span class="nc-type"><span class="nc-ic">' + ICO[n.tipo] + '</span>' + rotulo(n) + '</span><span class="nc-badge">' + quandoCurto(n) + '</span></div>'
+      + '<b class="nc-title">' + esc(n.titulo) + '</b>'
+      + '<div class="nc-meta"><span class="nc-av">' + esc(ini) + '</span><span class="nc-who">' + esc(n.nome || 'Sem cliente') + '</span>'
+      + '<span class="nc-dot"></span><span class="nc-date">' + CA.dbr(n.data) + '</span>' + (n.cod && n.cod.toLowerCase() !== rotulo(n).toLowerCase() ? '<span class="nc-code">' + esc(n.cod) + '</span>' : '') + '</div>'
+      + '<div class="nc-act"><button type="button" class="btn sm ghost" data-nact="' + n.abrir[0] + '" data-uid="' + esc(n.abrir[1]) + '">Abrir</button><button type="button" class="btn sm primary" data-nact="' + n.resolver[0] + '" data-uid="' + esc(n.resolver[1]) + '">' + acao + '</button></div>'
+      + '</article>';
+  }
+
 
 
   /* ---------- Notificações do aparelho (Web Push): celular e computador ---------- */
@@ -66,7 +81,6 @@
   function lsSet(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
   var ondeTxt = function () { return P.movel() ? 'celular' : 'computador'; };
 
-  var VERSAO = '3.3.8';
   var swReg = null, swErro = null, esperaTeste = null;
   /* Nenhuma etapa pode travar o botão: tudo tem tempo-limite e mensagem clara. */
   function limite(pr, ms, msg) {
@@ -164,20 +178,15 @@
     if (CA.api) await CA.api.sb.from('push_subscriptions').delete().eq('endpoint', ep);
     P.sub = null;
   };
-  function ajudaSO() {
-    if (P.movel()) return 'Não viu o aviso? Confira se as notificações do navegador estão liberadas nos ajustes do celular e se o modo Não perturbe está desligado.';
-    if (P.mac()) return 'Não viu o balão no canto da tela? No Mac: Ajustes do Sistema › Notificações › Google Chrome › Permitir notificações, e desligue o Foco/Não perturbe.';
-    return 'Não viu o balão no canto da tela? No Windows: Configurações › Sistema › Notificações › ative "Notificações" e "Google Chrome", e desligue o "Não perturbe". O Chrome precisa estar aberto (pode ser minimizado).';
-  }
+
   function pushBox() {
     var onde = ondeTxt();
-    if (!P.suportado()) {
-      return '<div class="np np-off"><b>Notificações no ' + onde + '</b><span>' + (P.ios() && !P.standalone() ? 'No iPhone, abra o sistema pelo ícone da tela de início para ativar os avisos.' : 'Este navegador não recebe notificações. Use o Chrome ou o Edge no computador, o Chrome no Android ou o ícone da tela de início no iPhone.') + '</span></div>';
-    }
-    if (Notification.permission === 'denied') return '<div class="np np-off"><b>Notificações bloqueadas neste ' + onde + '</b><span>' + (P.movel() ? 'Libere nos ajustes do celular (Notificações › Consultoria) e toque em Tentar de novo.' : 'Clique no cadeado ao lado do endereço do site › Notificações › Permitir. Depois recarregue a página.') + '</span><button type="button" class="btn sm" data-np="on">Tentar de novo</button></div>';
-    if (P.sub) return '<div class="np np-on"><b><i></i>Avisos ativos neste ' + onde + '</b><span>' + (P.diag === 'ok' ? 'Teste recebido por este navegador. ' + ajudaSO() : 'Os alertas chegam mesmo com o sistema fechado' + (P.movel() ? '.' : ', desde que o navegador esteja aberto (pode ser minimizado).')) + '</span><div><button type="button" class="btn sm" data-np="test">Enviar teste</button><button type="button" class="btn sm ghost" data-np="off">Desativar</button></div></div>';
-    return '<div class="np"><b>Receba os alertas neste ' + onde + '</b><span>Avisos de entregas, provas e agendamentos aparecem mesmo com o sistema fechado. O navegador pede sua permissão só uma vez; depois fica ativo sozinho.</span><button type="button" class="btn sm primary" data-np="on">Ativar neste ' + onde + '</button></div>';
+    if (!P.suportado()) return '<div class="np np-off"><span class="np-st"><i></i>' + (P.ios() && !P.standalone() ? 'Abra pelo ícone da tela de início para ativar os avisos' : 'Este navegador não recebe avisos') + '</span></div>';
+    if (Notification.permission === 'denied') return '<div class="np np-off"><span class="np-st" title="' + (P.movel() ? 'Libere nos ajustes do celular' : 'Cadeado na barra de endereço › Notificações › Permitir') + '"><i></i>Avisos bloqueados neste ' + onde + '</span><div class="np-b"><button type="button" class="btn sm" data-np="on">Tentar de novo</button></div></div>';
+    if (P.sub) return '<div class="np np-on"><span class="np-st"><i></i>Avisos ativados neste ' + onde + '</span><div class="np-b"><button type="button" class="btn sm" data-np="test">Enviar teste</button><button type="button" class="btn sm ghost" data-np="off">Desativar</button></div></div>';
+    return '<div class="np"><span class="np-st"><i></i>Avisos desativados neste ' + onde + '</span><div class="np-b"><button type="button" class="btn sm primary" data-np="on">Ativar</button></div></div>';
   }
+
   function refreshPainel() { var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(itens()); }
   document.addEventListener('click', async function (e) {
     var b = e.target.closest('[data-np]'); if (!b || P.busy) return;
@@ -186,7 +195,7 @@
     try {
       if (k === 'on' || k === 'test') {
         if (k === 'on') await P.ativar(); else await P.testar();
-        CA.toast(P.movel() ? 'Teste recebido. O aviso deve aparecer na tela do celular.' : 'Teste recebido pelo navegador. O balão deve aparecer no canto da tela.');
+        CA.toast(k === 'on' ? 'Avisos ativados neste ' + ondeTxt() + '.' : 'Aviso de teste recebido.');
       }
       else if (k === 'off') { await P.desativar(); CA.toast('Avisos desativados neste ' + ondeTxt() + '.'); }
     } catch (err) { CA.toast(err.message || String(err), 'err'); }
@@ -196,10 +205,11 @@
   /* ---------- Sino no cabeçalho + painel ---------- */
   function painelHTML(L) {
     var atr = L.filter(function (n) { return n.dias < 0; }).length;
-    return pushBox() + '<div class="nt-h"><b>Notificações</b><span>' + (L.length ? L.length + (L.length === 1 ? ' pendência' : ' pendências') + (atr ? ' · ' + atr + ' em atraso' : '') : 'nenhuma pendência') + '</span></div>'
+    return '<div class="nt-h"><b>Notificações</b><span class="nt-pills">' + (L.length ? '<span class="nt-pill">' + L.length + (L.length === 1 ? ' pendência' : ' pendências') + '</span>' + (atr ? '<span class="nt-pill late">' + atr + ' em atraso</span>' : '') : '<span class="nt-pill ok">Em dia</span>') + '</span></div>'
+      + pushBox()
       + (L.length ? '<div class="nt-l">' + L.map(function (n) { return linha(n); }).join('') + '</div>'
         : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova ou trabalho agendado.</span></div>')
-      + '<div class="nt-f"><span>Avisos de entregas e agendamentos com prazo em até 2 dias. Somem ao marcar como resolvido. <small class="nt-v">v' + VERSAO + '</small></span><a href="#/agenda/prazos" data-nclose>Ver agenda</a></div>';
+      + '<div class="nt-f"><span>Prazos em até 2 dias · somem ao concluir</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
   }
   function abrirPainel() {
     var p = $('notifPanel'), b = $('btnNotif');
