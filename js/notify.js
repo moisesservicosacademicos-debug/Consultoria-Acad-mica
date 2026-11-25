@@ -23,25 +23,30 @@
       out.push({ k: 'sch:' + s.uid, tipo: prova ? 'prova' : 'agenda', titulo: s.desc || s.tipo || 'Compromisso', nome: s.nome || '', data: s.data, hora: s.hora, dias: d,
         abrir: ['sch', s.uid], resolver: ['sch', s.uid], cod: s.tipo || '' });
     });
+    if (CA.portalNotifs) { try { out = out.concat(CA.portalNotifs()); } catch (e) { if (window.console) console.error(e); } }
     out.sort(function (a, b) { return a.dias - b.dias || (a.tipo === 'prova' ? -1 : b.tipo === 'prova' ? 1 : 0) || a.data.localeCompare(b.data); });
     return out;
   }
   CA.notificacoes = itens;
 
   function quando(n) {
+    if (n.tipo === 'portal') return n.semProg ? 'sem data programada' : CA.ptFalta(n.dias).toLowerCase();
     if (n.dias < 0) return 'atrasado há ' + (-n.dias) + (n.dias === -1 ? ' dia' : ' dias');
     if (n.dias === 0) return 'vence hoje' + (n.hora ? ' às ' + esc(n.hora) : '');
     if (n.dias === 1) return 'vence amanhã' + (n.hora ? ' às ' + esc(n.hora) : '');
     return 'vence em ' + n.dias + ' dias';
   }
-  function sev(n) { return n.dias < 0 ? 'late' : n.dias === 0 ? 'today' : 'soon'; }
-  function rotulo(n) { return n.tipo === 'prova' ? 'Prova' : n.tipo === 'agenda' ? 'Agendamento' : 'Entrega'; }
+  /* verde: mais de 5 dias · amarelo: 3 a 5 · vermelho: até 2 · hoje · atrasado */
+  function sev(n) { return n.semProg ? 'late' : CA.ptFaixa ? CA.ptFaixa(n.dias) : n.dias < 0 ? 'late' : n.dias === 0 ? 'today' : 'soon'; }
+  function rotulo(n) { return n.tipo === 'portal' ? 'Portal acadêmico' : n.tipo === 'prova' ? 'Prova' : n.tipo === 'agenda' ? 'Agendamento' : 'Entrega'; }
   var ICO = {
     entrega: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
     prova: '<svg viewBox="0 0 24 24"><path d="M9 11l2 2 4-4"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg>',
-    agenda: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'
+    agenda: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+    portal: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 9h6M7 12h10"/></svg>'
   };
   function quandoCurto(n) {
+    if (n.tipo === 'portal') return n.semProg ? 'Sem data' : CA.ptFalta(n.dias);
     if (n.dias < 0) return 'Atrasado há ' + (-n.dias) + (n.dias === -1 ? ' dia' : ' dias');
     if (n.dias === 0) return 'Vence hoje' + (n.hora ? ' · ' + esc(n.hora) : '');
     if (n.dias === 1) return 'Vence amanhã' + (n.hora ? ' · ' + esc(n.hora) : '');
@@ -51,7 +56,7 @@
     if (compacta) {
       return '<div class="nt-i ' + sev(n) + '"><span class="nt-ic">' + ICO[n.tipo] + '</span><div class="nt-t">'
         + '<span class="nt-k">' + rotulo(n) + ' · <b>' + quando(n) + '</b></span>'
-        + '<b class="nt-n">' + esc(n.titulo) + '</b><small>' + esc(n.nome) + ' · ' + CA.dbr(n.data) + (n.cod ? ' · ' + esc(n.cod) : '') + '</small></div></div>';
+        + '<b class="nt-n">' + esc(n.titulo) + '</b><small>' + esc(n.nome) + (n.data ? ' · ' + CA.dbr(n.data) : '') + (n.cod ? ' · ' + esc(n.cod) : '') + '</small></div></div>';
     }
     var acao = n.tipo === 'entrega' && n.abrir[0] === 'sv' ? 'Concluir' : 'Resolver';
     var ini = (String(n.nome || '?').trim().charAt(0) || '?').toUpperCase();
@@ -59,7 +64,8 @@
       + '<div class="nc-top"><span class="nc-type"><span class="nc-ic">' + ICO[n.tipo] + '</span>' + rotulo(n) + '</span><span class="nc-badge">' + quandoCurto(n) + '</span></div>'
       + '<b class="nc-title">' + esc(n.titulo) + '</b>'
       + '<div class="nc-meta"><span class="nc-av">' + esc(ini) + '</span><span class="nc-who">' + esc(n.nome || 'Sem cliente') + '</span>'
-      + '<span class="nc-dot"></span><span class="nc-date">' + CA.dbr(n.data) + '</span>' + (n.cod && n.cod.toLowerCase() !== rotulo(n).toLowerCase() ? '<span class="nc-code">' + esc(n.cod) + '</span>' : '') + '</div>'
+      + (n.data ? '<span class="nc-dot"></span><span class="nc-date">' + CA.dbr(n.data) + '</span>' : '') + (n.cod && n.cod.toLowerCase() !== rotulo(n).toLowerCase() ? '<span class="nc-code">' + esc(n.cod) + '</span>' : '') + '</div>'
+      + (n.linhas && n.linhas.length ? '<ul class="nc-items">' + n.linhas.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' : '')
       + '<div class="nc-act"><button type="button" class="btn sm ghost" data-nact="' + n.abrir[0] + '" data-uid="' + esc(n.abrir[1]) + '">Abrir</button><button type="button" class="btn sm primary" data-nact="' + n.resolver[0] + '" data-uid="' + esc(n.resolver[1]) + '">' + acao + '</button></div>'
       + '</article>';
   }
@@ -208,8 +214,8 @@
     return '<div class="nt-h"><b>Notificações</b><span class="nt-pills">' + (L.length ? '<span class="nt-pill">' + L.length + (L.length === 1 ? ' pendência' : ' pendências') + '</span>' + (atr ? '<span class="nt-pill late">' + atr + ' em atraso</span>' : '') : '<span class="nt-pill ok">Em dia</span>') + '</span></div>'
       + pushBox()
       + (L.length ? '<div class="nt-l">' + L.map(function (n) { return linha(n); }).join('') + '</div>'
-        : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova ou trabalho agendado.</span></div>')
-      + '<div class="nt-f"><span>Prazos em até 2 dias · somem ao concluir</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
+        : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova ou trabalho agendado, e antes de cada conferência de portal.</span></div>')
+      + '<div class="nt-f"><span>Entregas em até 2 dias · portais conforme a antecedência · somem ao resolver</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
   }
   function abrirPainel() {
     var p = $('notifPanel'), b = $('btnNotif');
@@ -244,6 +250,8 @@
     b.title = L.length ? L.length + ' notificações' : 'Nenhuma notificação';
     document.title = (L.length ? '(' + L.length + ') ' : '') + document.title.replace(/^\(\d+\+?\)\s*/, '');
     var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(L);
+    // o alerta automático continua só para o que é urgente (até 2 dias ou atrasado)
+    L = L.filter(function (n) { return n.semProg || n.dias <= JANELA; });
     ultimaAssin = L.map(function (n) { return n.k + '@' + n.dias; }).join('|');
     if (!L.length) { fecharAlerta(false); return; }
     // reaparece em cada entrada no sistema, quando surge pendência nova ou a cada hora

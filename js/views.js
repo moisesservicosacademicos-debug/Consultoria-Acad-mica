@@ -26,7 +26,7 @@
 
   function badges(M) {
     var hojeAtras = M.prazos.filter(function (p) { return p.dias !== null && p.dias < 0; }).length;
-    return { mensalidades: M.atrasados.length, agenda: hojeAtras };
+    return { mensalidades: M.atrasados.length, agenda: hojeAtras + (CA.portalLateCount ? CA.portalLateCount() : 0) };
   }
 
   CA.render = function (scrollTop) {

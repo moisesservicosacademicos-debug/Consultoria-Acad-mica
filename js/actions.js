@@ -111,6 +111,7 @@
         return '<div class="row"><div class="main"><b>' + esc(h.t) + '</b><span>' + dbr(h.d) + (h.f ? ' · ' + esc(h.f) : '') + '</span></div><div class="val num in">' + brl(h.v) + '</div><button class="btn-ghost sm danger" data-undo="' + h.ds + '" data-uid="' + esc(h.uid) + '" aria-label="Estornar">' + ic('undo') + '</button></div>';
       }).join('') + '</div></div></details>';
     }
+    if (CA.portalClientSection) body += CA.portalClientSection(id);
     if (acc.length) {
       body += '<section class="panel"><div class="panel-h"><h2>Acesso ao portal</h2></div><div class="panel-b">' + acc.map(function (a) {
         return '<dl class="facts"><div><dt>Faculdade</dt><dd>' + esc(a.fac || '—') + '</dd></div><div><dt>Login</dt><dd class="num">' + esc(a.login || '—') + '</dd></div><div><dt>Senha</dt><dd class="num"><span data-pw2>••••••••</span> <button class="btn-ghost sm" data-showpw="' + esc(a.uid) + '">' + ic('eye') + 'Ver</button></dd></div></dl>';

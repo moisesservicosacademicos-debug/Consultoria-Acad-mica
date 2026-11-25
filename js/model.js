@@ -8,7 +8,7 @@
   function arr(d, k) { return Array.isArray(d && d[k]) ? d[k] : []; }
 
   CA.M = function () {
-    if (memo) return memo;
+    if (memo && memo.hoje === CA.today()) return memo; // recalcula sozinho na virada do dia
     var d = CA.S.data || {}, hoje = CA.today();
     var M = { hoje: hoje };
 
