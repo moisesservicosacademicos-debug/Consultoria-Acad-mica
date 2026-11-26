@@ -198,7 +198,21 @@
     return '<div class="np"><span class="np-st"><i></i>Avisos desativados neste ' + onde + '</span><div class="np-b"><button type="button" class="btn sm primary" data-np="on">Ativar</button></div></div>';
   }
 
-  function refreshPainel() { var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(itens()); }
+  /* Sino e central sempre a partir da MESMA lista: o número do sino é exatamente a quantidade de cartões da central */
+  function contar(L) {
+    var b = $('btnNotif'), c = $('notifCount'); if (!b || !c) return;
+    c.textContent = L.length > 99 ? '99+' : L.length; c.hidden = !L.length;
+    b.classList.toggle('has', !!L.length);
+    b.title = L.length ? L.length + (L.length === 1 ? ' notificação' : ' notificações') : 'Nenhuma notificação';
+    document.title = (L.length ? '(' + L.length + ') ' : '') + document.title.replace(/^\(\d+\+?\)\s*/, '');
+  }
+  function sincronizar() {
+    if (!CA.S || !CA.S.data) return;
+    var L = itens(); contar(L);
+    var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(L);
+  }
+  CA.sincronizarSino = sincronizar;
+  function refreshPainel() { var p = $('notifPanel'); if (p && !p.hidden) { var L = itens(); contar(L); p.innerHTML = painelHTML(L); } }
   document.addEventListener('click', async function (e) {
     var b = e.target.closest('[data-np]'); if (!b || P.busy) return;
     e.stopPropagation();
@@ -224,7 +238,8 @@
   }
   function abrirPainel() {
     var p = $('notifPanel'), b = $('btnNotif');
-    p.innerHTML = painelHTML(itens()); p.hidden = false; b.setAttribute('aria-expanded', 'true');
+    var L = itens(); contar(L);
+    p.innerHTML = painelHTML(L); p.hidden = false; b.setAttribute('aria-expanded', 'true');
     fecharAlerta(true);
   }
   function fecharPainel() { var p = $('notifPanel'); if (!p || p.hidden) return; p.hidden = true; $('btnNotif').setAttribute('aria-expanded', 'false'); }
@@ -249,11 +264,7 @@
   CA.atualizarNotificacoes = function () {
     var b = $('btnNotif'); if (!b || !CA.S.data) return;
     if (CA.push && !CA.push.synced) CA.push.sync();
-    var L = itens(), c = $('notifCount');
-    c.textContent = L.length > 99 ? '99+' : L.length; c.hidden = !L.length;
-    b.classList.toggle('has', !!L.length);
-    b.title = L.length ? L.length + ' notificações' : 'Nenhuma notificação';
-    document.title = (L.length ? '(' + L.length + ') ' : '') + document.title.replace(/^\(\d+\+?\)\s*/, '');
+    var L = itens(); contar(L);
     var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(L);
     // o alerta automático continua só para o que é urgente (até 2 dias ou atrasado)
     L = L.filter(function (n) { return n.semProg || n.dias <= JANELA; });
@@ -270,6 +281,12 @@
   var render0 = CA.render;
   CA.render = function () { var r = render0.apply(this, arguments); try { CA.atualizarNotificacoes(); } catch (e) { if (window.console) console.error(e); } return r; };
   setInterval(function () { try { CA.atualizarNotificacoes(); } catch (e) {} }, 5 * 60 * 1000);
+  // O sino também acompanha dados que chegam sem redesenhar a tela (sincronização com formulário aberto,
+  // lançamentos feitos pelo artefato ou outro aparelho) e a virada do dia.
+  var pull0 = CA.pull;
+  CA.pull = function () { return pull0.apply(this, arguments).then(function (v) { try { sincronizar(); } catch (e) {} return v; }); };
+  setInterval(function () { try { sincronizar(); } catch (e) {} }, 60 * 1000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { try { sincronizar(); } catch (e) {} } });
 
   /* Eventos */
   function acao(el) {
