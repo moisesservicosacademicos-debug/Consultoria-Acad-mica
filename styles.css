@@ -1521,3 +1521,15 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 .dn-leg .p { color: var(--muted); font-weight: 700; text-align: right; }
 .dn-leg .v { font-weight: 800; text-align: right; }
 @media (max-width: 760px) { .evo-per { flex-wrap: nowrap; overflow-x: auto; width: 100%; } .evo-per button { flex: 1 0 auto; } }
+
+/* ---------- Fichas: voltar e atalho do portal (v3.5.1) ---------- */
+.drawer-back { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px -6px; padding: 6px 10px 6px 6px; border: 0; border-radius: var(--radius); background: rgba(255, 255, 255, .12); color: #fff; font-size: var(--fs-s); font-weight: 600; cursor: pointer; max-width: calc(100% - 48px); }
+.drawer-back svg { width: 16px; height: 16px; transform: rotate(180deg); flex: none; }
+.drawer-back span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-back:hover { background: rgba(255, 255, 255, .2); }
+.drawer-back:focus-visible { outline: none; box-shadow: var(--focus); }
+.pt-row { cursor: pointer; }
+.pt-row:hover { background: var(--surface-2); }
+.pt-row:focus-visible { outline: none; box-shadow: var(--focus); border-radius: var(--radius-s); }
+.pt-row .pt-go { flex: none; }
+@media (max-width: 520px) { .pt-row .pt-go span { display: none; } .pt-row .pt-go { padding: 6px 8px; } }

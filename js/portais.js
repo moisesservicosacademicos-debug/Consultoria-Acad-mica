@@ -535,6 +535,7 @@
           + (x.proxima ? '<span>Próxima conferência: ' + dbr(x.proxima) + '</span>' : '') + (x.obs ? '<span class="pt-ob">' + esc(x.obs) + '</span>' : '') + '</li>';
       }).join('') + '</ol>' : '<div class="empty">Nenhuma conferência registrada ainda.</div>') + '</div></details>';
     CA.drawer({
+      key: 'pt:' + uid, reopen: function () { openPortal(uid); },
       title: p.inst || 'Portal acadêmico', sub: p.nome + ' · ' + p.situacao.t.toLowerCase(), actions: actions, body: body,
       mount: function (d) {
         d.addEventListener('click', function (e) {
@@ -559,8 +560,10 @@
   function rowPortal(p) {
     var nx = p.itens.filter(function (x) { return x.k !== 'conf'; })[0];
     var right = !p.ativo ? '<span class="chip mute">' + esc(p.st) + '</span>' : p.semProg ? '<span class="pt-chip late">Sem data</span>' : chip(p.diasConf);
-    return '<button type="button" class="row" data-ptopen="' + esc(p.uid) + '">' + CA.views.when(p.ativo ? p.prox : '', p.ativo ? p.diasConf : null)
-      + '<div class="main"><b>' + esc(p.nome) + ' · ' + esc(p.inst) + '</b><span>' + esc(p.situacao.t) + (p.ativo && p.prox ? ' · conferir ' + dd(p.prox) : '') + (nx ? ' · ' + esc(nx.t.toLowerCase()) + ' ' + dd(nx.d) : '') + '</span></div>' + right + '</button>';
+    var url = safeUrl(p.url);
+    return '<div class="row pt-row" role="button" tabindex="0" data-ptopen="' + esc(p.uid) + '" title="Ver detalhes do portal">' + CA.views.when(p.ativo ? p.prox : '', p.ativo ? p.diasConf : null)
+      + '<div class="main"><b>' + esc(p.nome) + ' · ' + esc(p.inst) + '</b><span>' + esc(p.situacao.t) + (p.ativo && p.prox ? ' · conferir ' + dd(p.prox) : '') + (nx ? ' · ' + esc(nx.t.toLowerCase()) + ' ' + dd(nx.d) : '') + '</span></div>' + right
+      + (url ? '<a class="btn sm pt-go" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" title="Abrir o site do portal em outra aba">' + ic('out') + '<span>Abrir portal</span></a>' : '') + '</div>';
   }
 
   /* ================= TELA: Agenda › Portais acadêmicos ================= */
@@ -610,11 +613,17 @@
     return act0.apply(this, arguments);
   };
   document.addEventListener('click', function (e) {
+    if (e.target.closest('a[href]')) return; // link "Abrir portal" segue normalmente
     var b = e.target.closest('[data-ptopen],[data-ptadd]'); if (!b) return;
     var inV = b.closest('#view,#drawer'); if (!inV) return;
     e.stopPropagation();
     if (b.hasAttribute('data-ptopen')) openPortal(b.getAttribute('data-ptopen')); else formPortal(null, b.getAttribute('data-ptadd'));
   }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var b = e.target.closest && e.target.closest('.pt-row[data-ptopen]'); if (!b || e.target !== b) return;
+    e.preventDefault(); openPortal(b.getAttribute('data-ptopen'));
+  });
   CA.openPortal = openPortal; CA.formConferencia = formConferencia; CA.formPortal = formPortal;
   CA._pt = { refOf: refOf, faixa: faixa, falta: falta, situacao: situacao, hoje: hoje }; // usado pelos testes
 })(window.CA);

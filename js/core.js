@@ -6,7 +6,7 @@ window.CA = window.CA || {};
     url: 'https://teemhlpfcnhfwveedmym.supabase.co',
     key: 'sb_publishable_DQ9AGXIkznhUj_bg-whWFg_YjYlmMtl',
     ws: 'nova_empresa_main',
-    version: '3.5.0',
+    version: '3.5.1',
     poll: 30000
   };
 
@@ -242,7 +242,9 @@ window.CA = window.CA || {};
 
   var lastFocus = null;
   function openLayer() { lastFocus = document.activeElement; CA.$('overlay').hidden = false; document.body.style.overflow = 'hidden'; }
+  var dStack = [], dCur = null, dBack = false; // fichas abertas uma por cima da outra (botão Voltar)
   function closeLayers() {
+    dStack = []; dCur = null;
     CA.$('overlay').hidden = true; CA.$('drawer').hidden = true; CA.$('modal').hidden = true;
     CA.$('drawer').innerHTML = ''; CA.$('modal').innerHTML = ''; document.body.style.overflow = '';
     if (lastFocus && lastFocus.focus) try { lastFocus.focus(); } catch (e) {}
@@ -270,14 +272,24 @@ window.CA = window.CA || {};
     return m;
   };
   CA.drawer = function (o) {
-    openLayer();
+    var aberta = !CA.$('drawer').hidden && dCur;
+    if (!aberta) { dStack = []; openLayer(); }
+    else if (!dBack && !(o.key && dCur.key === o.key)) dStack.push(dCur); // mesma ficha atualizada: não empilha
+    if (dStack.length > 8) dStack.shift();
+    dCur = o;
+    var prev = dStack[dStack.length - 1];
     // nova gaveta a cada abertura: elimina ouvintes de cliques de fichas abertas antes
     var d0 = CA.$('drawer'), d = d0.cloneNode(false); d0.parentNode.replaceChild(d, d0);
-    d.innerHTML = '<div class="drawer-h"><h2 id="drawerTitle">' + esc(o.title) + '</h2>' + (o.sub ? '<p>' + esc(o.sub) + '</p>' : '')
+    d.innerHTML = '<div class="drawer-h">' + (prev ? '<button type="button" class="drawer-back" data-back>' + CA.icon('chev') + '<span>Voltar para <b>' + esc(prev.title) + '</b></span></button>' : '') + '<h2 id="drawerTitle">' + esc(o.title) + '</h2>' + (o.sub ? '<p>' + esc(o.sub) + '</p>' : '')
       + '<button class="icon-btn" type="button" data-close aria-label="Fechar">' + CA.icon('x') + '</button>'
       + (o.actions ? '<div class="drawer-actions">' + o.actions + '</div>' : '') + '</div><div class="drawer-b">' + (o.body || '') + '</div>';
     d.hidden = false;
     d.querySelector('[data-close]').addEventListener('click', closeLayers);
+    var bk = d.querySelector('[data-back]');
+    if (bk) bk.addEventListener('click', function (e) {
+      e.stopPropagation(); var p = dStack.pop(); if (!p) return;
+      dBack = true; try { if (p.reopen) p.reopen(); else CA.drawer(p); } finally { dBack = false; }
+    });
     if (o.mount) o.mount(d);
     try { d.querySelector('[data-close]').focus({ preventScroll: true }); } catch (e) {}
     return d;

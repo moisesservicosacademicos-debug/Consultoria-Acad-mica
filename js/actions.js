@@ -121,6 +121,7 @@
     }
     if (!svs.length && !hist.length && !rc) body += '<div class="empty"><b>Sem movimentação ainda</b>Lance um serviço ou cadastre como mensalista.</div>';
     CA.drawer({
+      key: 'cli:' + id, reopen: function () { openClient(id); },
       title: nome, sub: id + (rc ? ' · mensalista ' + rc.status.toLowerCase() : c ? ' · ' + c.tipo.toLowerCase() : ''), actions: actions, body: body,
       mount: function (d) {
         d.addEventListener('click', function (e) {
@@ -662,6 +663,7 @@
       return '<div class="row"><div class="main"><b>' + esc(p.parcela || 'Recebimento') + '</b><span>' + dbr(p.data) + ' · ' + esc(p.forma) + '</span></div><div class="val num in">' + brl(p.valor) + '</div><button class="btn-ghost sm danger" data-undo="' + esc(p.uid) + '">' + ic('undo') + 'Estornar</button></div>';
     }).join('') : '<div class="empty">Nenhum recebimento ainda</div>') + '</div></div></section>';
     CA.drawer({
+      key: 'sv:' + uid, reopen: function () { openService(uid); },
       title: s.servico, sub: s.sid + ' · ' + s.nome, actions: actions, body: body,
       mount: function (d) {
         d.addEventListener('click', function (e) {
