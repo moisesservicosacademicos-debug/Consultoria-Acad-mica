@@ -218,12 +218,6 @@
             + (ps.length ? '<span>Já acompanhado em: <b>' + ps.map(function (x) { return esc(x.inst); }).join(', ') + '</b></span>' : '') + '</div>';
           if (!p && !(rc && rc.status === 'Ativo')) h += '<div class="note" style="margin-top:8px">Cliente eventual: o acompanhamento contínuo fica habilitado só para este aluno, por escolha sua.</div>';
           box.innerHTML = h;
-          if (!p) {
-            // sugere as instituições já conhecidas do aluno (cadastro e Acessos de portal) que ainda não têm portal
-            var sug = [], vistos = {};
-            instsDoAluno(c).forEach(function (n) { var k = CA.normS(n).trim(); if (!k || vistos[k] || ps.some(function (x) { return CA.normS(x.inst).trim() === k; })) return; vistos[k] = 1; sug.push(n); });
-            setRows(sug.length ? sug : ['']);
-          }
         };
         var rowsBox = m.querySelector('#pInsts');
         var renum = function () {
@@ -235,9 +229,8 @@
           r.querySelector('[data-rmi]').onclick = function () { r.remove(); renum(); };
           renum(); return r;
         };
-        var setRows = function (nomes) { rowsBox.innerHTML = ''; nomes.forEach(function (n) { addRow(n); }); };
         if (!p) {
-          setRows(['']);
+          addRow(''); // campos sempre em branco: você digita cada instituição
           m.querySelector('#pAddInst').onclick = function () { var r = addRow(''); try { r.querySelector('[data-f=inst]').focus(); } catch (e) {} };
           m.querySelector('#pC').onchange = info; if (cidPre) info();
         }
@@ -293,12 +286,6 @@
         var bn = m.querySelector('#bNow'); if (bn) bn.onclick = function () { save(this, true); };
       }
     });
-  }
-  /* Instituições já conhecidas do aluno: campo Faculdade do cadastro (pode ter várias, separadas por / , ; + |) e Acessos de portal */
-  function instsDoAluno(c) {
-    var L = String(c.fac || '').split(/\s*[\/;,+|]\s*/);
-    CA.M().access.forEach(function (a) { if (a.cid === c.id && a.fac) L.push(a.fac); });
-    return L.map(function (x) { return String(x || '').replace(/\s+/g, ' ').trim(); }).filter(function (x) { return x.length >= 2; });
   }
   function instRow(nome) {
     return '<div class="pt-inst"><div class="pt-inst-h"><b class="pt-inst-n">Instituição</b><button type="button" class="btn-ghost sm danger" data-rmi aria-label="Remover esta instituição">' + ic('x') + 'Remover</button></div>'
