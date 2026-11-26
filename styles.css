@@ -1466,3 +1466,11 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 .pt-inst-n { font-size: var(--fs-s); font-weight: 800; color: var(--action); }
 .pt-inst .form-grid { gap: 10px 12px; }
 .pt-ih { display: block; margin-top: 6px; color: var(--muted); font-size: var(--fs-xs); }
+/* entregas, provas e agendamentos: amarelo até o dia do vencimento, vermelho depois (v3.4.3) */
+.nc.dhoje::before { background: var(--warn); width: 5px; }
+.nc.dhoje .nc-ic, .nc.mid .nc-ic { background: var(--warn-soft); }
+.nc.dhoje .nc-ic svg, .nc.mid .nc-ic svg { stroke: var(--warn); }
+.nc.dhoje .nc-badge { background: var(--warn); color: #fff; }
+.nt-i.mid .nt-ic, .nt-i.dhoje .nt-ic { background: var(--warn-soft); }
+.nt-i.mid .nt-ic svg, .nt-i.dhoje .nt-ic svg { stroke: var(--warn); }
+.nt-i.mid .nt-k b, .nt-i.dhoje .nt-k b { color: var(--warn); }

@@ -37,7 +37,12 @@
     return 'vence em ' + n.dias + ' dias';
   }
   /* verde: mais de 5 dias · amarelo: 3 a 5 · vermelho: até 2 · hoje · atrasado */
-  function sev(n) { return n.semProg ? 'late' : CA.ptFaixa ? CA.ptFaixa(n.dias) : n.dias < 0 ? 'late' : n.dias === 0 ? 'today' : 'soon'; }
+  /* Entregas, provas e agendamentos: aparecem a partir de 2 dias antes em amarelo (no dia, amarelo forte);
+     depois que o dia passa sem resolver, ficam vermelhos. Portais seguem a escala própria de portais.js. */
+  function sev(n) {
+    if (n.tipo === 'portal') return n.semProg ? 'late' : CA.ptFaixa ? CA.ptFaixa(n.dias) : n.dias < 0 ? 'late' : 'mid';
+    return n.dias < 0 ? 'late' : n.dias === 0 ? 'dhoje' : 'mid';
+  }
   function rotulo(n) { return n.tipo === 'portal' ? 'Portal acadêmico' : n.tipo === 'prova' ? 'Prova' : n.tipo === 'agenda' ? 'Agendamento' : 'Entrega'; }
   var ICO = {
     entrega: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
@@ -233,7 +238,7 @@
   function mostrarAlerta(L) {
     var a = $('notifAlert'), atr = L.filter(function (n) { return n.dias < 0; }).length, hoje = L.filter(function (n) { return n.dias === 0; }).length;
     var tit = atr ? (atr === 1 ? '1 pendência em atraso' : atr + ' pendências em atraso') : hoje ? (hoje === 1 ? '1 pendência vence hoje' : hoje + ' pendências vencem hoje') : (L.length === 1 ? '1 prazo vence nos próximos 2 dias' : L.length + ' prazos vencem nos próximos 2 dias');
-    a.className = 'nt-alert ' + (atr || hoje ? 'late' : 'soon');
+    a.className = 'nt-alert ' + (L.some(function (n) { var c = sev(n); return c === 'late' || c === 'today'; }) ? 'late' : 'soon');
     a.innerHTML = '<div class="na-h"><span class="na-ic"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><div><b>Atenção: ' + tit + '</b><span>Confira e não deixe passar. O aviso continua até ser marcado como resolvido.</span></div>'
       + '<button type="button" class="na-x" data-nx aria-label="Fechar aviso"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>'
       + '<div class="na-l">' + L.slice(0, 4).map(function (n) { return linha(n, true); }).join('') + '</div>'
