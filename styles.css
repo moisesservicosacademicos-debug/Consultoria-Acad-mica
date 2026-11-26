@@ -1459,3 +1459,10 @@ button.el { cursor: pointer; } button.el:hover b { color: var(--action); }
 .pt-o textarea { min-height: 56px; }
 @media (max-width: 640px) { .pt-ev-d label { flex-basis: 45%; } .pt-ev-h select { flex: 1; } .pt-ev-h input { flex: 1 1 100%; order: 3; min-width: 0; } }
 .pt-kpi.zero b { color: var(--muted); }
+/* cadastro de portal com várias instituições (v3.4.1) */
+.pt-insts { display: flex; flex-direction: column; gap: 10px; }
+.pt-inst { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px 12px; background: var(--surface); }
+.pt-inst-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; min-height: 28px; }
+.pt-inst-n { font-size: var(--fs-s); font-weight: 800; color: var(--action); }
+.pt-inst .form-grid { gap: 10px 12px; }
+.pt-ih { display: block; margin-top: 6px; color: var(--muted); font-size: var(--fs-xs); }

@@ -180,7 +180,7 @@
     return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); }).map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
   }
   function accessOf(p) { var n = CA.normS(p.inst); return CA.M().access.filter(function (a) { return a.cid === p.cid && a.fac && (CA.normS(a.fac).indexOf(n) >= 0 || n.indexOf(CA.normS(a.fac)) >= 0); })[0] || null; }
-  function safeUrl(u) { u = String(u || '').trim(); if (!u) return ''; if (!/^https?:\/\//i.test(u)) u = 'https://' + u; try { var x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch (e) { return ''; } }
+  function safeUrl(u) { u = String(u || '').trim(); if (!u || /\s/.test(u)) return ''; if (!/^https?:\/\//i.test(u)) u = 'https://' + u; try { var x = new URL(u); return /^https?:$/.test(x.protocol) && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(x.hostname) ? x.href : ''; } catch (e) { return ''; } }
 
   /* ================= ADICIONAR / EDITAR PORTAL ================= */
   function formPortal(uid, cidPre) {
@@ -193,10 +193,12 @@
     var body = '<div class="form-grid">'
       + (p ? '<div class="full review"><span><b>' + esc(p.nome) + '</b> · ' + esc(p.cid) + ' · ' + esc(p.contratacao) + '</span></div>' : field('pC', 'Aluno', '<select id="pC">' + cOpt + '</select>', 'full', 'Os dados do cadastro (nome, WhatsApp, tipo de contratação) vêm da Base de acadêmicos.'))
       + '<div class="full" id="pInfo"></div>'
-      + field('pI', 'Instituição', '<input id="pI" list="pIList" autocomplete="off" value="' + esc(p ? p.inst : '') + '"><datalist id="pIList">' + instOptions() + '</datalist>', '')
+      + (p ? field('pI', 'Instituição', '<input id="pI" list="pIList" autocomplete="off" value="' + esc(p ? p.inst : '') + '"><datalist id="pIList">' + instOptions() + '</datalist>', '')
       + field('pCu', 'Curso (opcional)', inp('pCu', 'text', p ? p.curso : ''), '')
       + field('pM', 'Matrícula (opcional)', inp('pM', 'text', p ? p.matr : '', ' autocomplete="off"'), '')
       + field('pU', 'Endereço do portal (opcional)', inp('pU', 'url', p ? p.url : '', ' placeholder="https://…" inputmode="url"'), '', 'Só o link de acesso. Login e senha continuam em Acessos de portal.')
+      : '<div class="full pt-insts" id="pInsts"></div><datalist id="pIList">' + instOptions() + '</datalist>'
+        + '<div class="full"><button type="button" class="btn sm" id="pAddInst">' + ic('plus') + 'Adicionar outra instituição</button><small class="pt-ih">Para aluno com mais de uma instituição: cada uma vira um portal separado, com o próprio link e as próprias conferências.</small></div>')
       + (p ? field('pS', 'Acompanhamento', '<select id="pS">' + opts([['Ativo', 'Ativo'], ['Suspenso', 'Suspenso'], ['Encerrado', 'Encerrado']], p.st) + '</select>', '')
         + field('pA', 'Avisar com antecedência de', '<select id="pA">' + opts([[3, '3 dias'], [5, '5 dias'], [7, '7 dias'], [10, '10 dias'], [15, '15 dias']], p.antec) + '</select>', '')
         + '<div class="full" id="pReat" hidden>' + field('pR', 'Próxima conferência', inp('pR', 'date', p.prox && p.prox >= hoje() ? p.prox : hoje(), ' min="' + hoje() + '"'), '', 'Obrigatória para reativar o acompanhamento.') + '</div>'
@@ -216,9 +218,29 @@
             + (ps.length ? '<span>Já acompanhado em: <b>' + ps.map(function (x) { return esc(x.inst); }).join(', ') + '</b></span>' : '') + '</div>';
           if (!p && !(rc && rc.status === 'Ativo')) h += '<div class="note" style="margin-top:8px">Cliente eventual: o acompanhamento contínuo fica habilitado só para este aluno, por escolha sua.</div>';
           box.innerHTML = h;
-          if (!p && !val(m, 'pI') && c.fac && !ps.some(function (x) { return CA.normS(x.inst) === CA.normS(c.fac); })) m.querySelector('#pI').value = c.fac;
+          if (!p) {
+            // sugere as instituições já conhecidas do aluno (cadastro e Acessos de portal) que ainda não têm portal
+            var sug = [], vistos = {};
+            instsDoAluno(c).forEach(function (n) { var k = CA.normS(n).trim(); if (!k || vistos[k] || ps.some(function (x) { return CA.normS(x.inst).trim() === k; })) return; vistos[k] = 1; sug.push(n); });
+            setRows(sug.length ? sug : ['']);
+          }
         };
-        if (!p) { m.querySelector('#pC').onchange = function () { m.querySelector('#pI').value = ''; info(); }; if (cidPre) info(); }
+        var rowsBox = m.querySelector('#pInsts');
+        var renum = function () {
+          var rows = rowsBox.querySelectorAll('.pt-inst'), many = rows.length > 1;
+          [].forEach.call(rows, function (r, i) { r.querySelector('.pt-inst-n').textContent = many ? 'Instituição ' + (i + 1) : 'Instituição'; r.querySelector('[data-rmi]').hidden = !many; });
+        };
+        var addRow = function (nome) {
+          var w = document.createElement('div'); w.innerHTML = instRow(nome || ''); var r = w.firstChild; rowsBox.appendChild(r);
+          r.querySelector('[data-rmi]').onclick = function () { r.remove(); renum(); };
+          renum(); return r;
+        };
+        var setRows = function (nomes) { rowsBox.innerHTML = ''; nomes.forEach(function (n) { addRow(n); }); };
+        if (!p) {
+          setRows(['']);
+          m.querySelector('#pAddInst').onclick = function () { var r = addRow(''); try { r.querySelector('[data-f=inst]').focus(); } catch (e) {} };
+          m.querySelector('#pC').onchange = info; if (cidPre) info();
+        }
         else {
           info();
           var ps = m.querySelector('#pS'), box = m.querySelector('#pReat');
@@ -227,9 +249,12 @@
         }
         var save = function (btn, now) {
           CA.run(btn, m.querySelector('.form-err'), async function () {
-            var inst = val(m, 'pI').replace(/\s+/g, ' '), urlRaw = val(m, 'pU'), url = safeUrl(urlRaw);
-            if (inst.length < 2) fail('Informe a instituição do portal.');
-            if (urlRaw && !url) fail('Endereço do portal inválido. Use um link que comece com https://');
+            var inst = '', url = '', novos = [];
+            if (p) {
+              inst = val(m, 'pI').replace(/\s+/g, ' '); var urlRaw = val(m, 'pU'); url = safeUrl(urlRaw);
+              if (inst.length < 2) fail('Informe a instituição do portal.');
+              if (urlRaw && !url) fail('Endereço do portal inválido. Use um link que comece com https://');
+            } else novos = lerInsts(m);
             var data = await CA.fresh(), ts = CA.ts(), rec, cid;
             if (p) {
               rec = recordOf(data, p.uid); if (!rec) fail('Este portal não existe mais na base. Atualize a tela.');
@@ -239,8 +264,9 @@
             }
             var cli = arr(data, 'clients').filter(function (x) { return x['ID Cliente'] === cid; })[0];
             if (!cli) fail('Aluno não encontrado na Base de acadêmicos. Atualize a tela.');
-            var dup = arr(data, DS).filter(function (x) { return x._clientId === cid && (!p || x._uid !== p.uid) && (x['Status do acompanhamento'] || 'Ativo') !== 'Encerrado' && CA.normS(x['Instituição']).trim() === CA.normS(inst).trim(); })[0];
-            if (dup) fail('Este aluno já tem um portal da ' + inst + ' em acompanhamento.');
+            var temPortal = function (nome) { return arr(data, DS).filter(function (x) { return x._clientId === cid && (!p || x._uid !== p.uid) && (x['Status do acompanhamento'] || 'Ativo') !== 'Encerrado' && CA.normS(x['Instituição']).trim() === CA.normS(nome).trim(); })[0]; };
+            (p ? [inst] : novos.map(function (n) { return n.inst; })).forEach(function (nome) { if (temPortal(nome)) fail('Este aluno já tem um portal da ' + nome + ' em acompanhamento.'); });
+            var ops = [];
             if (p) {
               var st = val(m, 'pS'), antec = parseInt(val(m, 'pA'), 10) || ANTEC_PADRAO;
               Object.assign(rec, { 'Instituição': inst, Curso: val(m, 'pCu'), 'Matrícula': val(m, 'pM'), 'Endereço do portal': url, 'Status do acompanhamento': st, 'Antecedência do aviso': antec }, CA.editor(ts));
@@ -251,9 +277,14 @@
               if (st !== p.st) rec['Histórico'] = histPush(rec['Histórico'], { id: 'h_' + CA.rnd(8), em: agora(), tipo: 'status', resumo: 'Acompanhamento ' + (st === 'Ativo' ? 'reativado' : st.toLowerCase()) + '.', por: (CA.S.user && CA.S.user.email) || '' });
             } else {
               var pp = val(m, 'pP'); if (!sane(pp) || pp < hoje()) fail('Informe a data da primeira conferência (hoje ou depois).');
-              rec = Object.assign({ _uid: 'portals_web_' + CA.slug(cli.Nome) + '_' + CA.slug(inst).slice(0, 12) + '_' + CA.rnd(5), _clientId: cid, _clientKey: cli._clientKey || '', 'Cliente/Aluno': cli.Nome, WhatsApp: cli.WhatsApp || '', 'Instituição': inst, Curso: val(m, 'pCu'), 'Matrícula': val(m, 'pM'), 'Endereço do portal': url, 'Status do acompanhamento': 'Ativo', 'Situação constatada': '', 'Última conferência': '', 'Próxima conferência': pp, 'Antecedência do aviso': ANTEC_PADRAO, Recesso: null, Eventos: [], 'Histórico': [], _createdAt: ts, _editedAt: ts }, CA.creator());
+              novos.forEach(function (n) {
+                var r = Object.assign({ _uid: 'portals_web_' + CA.slug(cli.Nome) + '_' + CA.slug(n.inst).slice(0, 12) + '_' + CA.rnd(5), _clientId: cid, _clientKey: cli._clientKey || '', 'Cliente/Aluno': cli.Nome, WhatsApp: cli.WhatsApp || '', 'Instituição': n.inst, Curso: n.curso, 'Matrícula': n.matr, 'Endereço do portal': n.url, 'Status do acompanhamento': 'Ativo', 'Situação constatada': '', 'Última conferência': '', 'Próxima conferência': pp, 'Antecedência do aviso': ANTEC_PADRAO, Recesso: null, Eventos: [], 'Histórico': [], _createdAt: ts, _editedAt: ts }, CA.creator());
+                ops.push({ type: 'upsert', dataset: DS, uid: r._uid, record: r }); if (!rec) rec = r;
+              });
             }
-            await CA.commit([{ type: 'upsert', dataset: DS, uid: rec._uid, record: rec }], p ? 'portal-edicao' : 'portal-novo', p ? 'Portal atualizado.' : 'Portal de ' + inst + ' adicionado.');
+            if (p) ops.push({ type: 'upsert', dataset: DS, uid: rec._uid, record: rec });
+            // todos os portais do aluno entram numa única gravação: ou grava tudo, ou nada
+            await CA.commit(ops, p ? 'portal-edicao' : 'portal-novo', p ? 'Portal atualizado.' : novos.length === 1 ? 'Portal de ' + novos[0].inst + ' adicionado.' : novos.length + ' portais adicionados: ' + novos.map(function (n) { return n.inst; }).join(', ') + '.');
             CA.closeLayers();
             if (now) setTimeout(function () { formConferencia(rec._uid); }, 60);
           });
@@ -262,6 +293,35 @@
         var bn = m.querySelector('#bNow'); if (bn) bn.onclick = function () { save(this, true); };
       }
     });
+  }
+  /* Instituições já conhecidas do aluno: campo Faculdade do cadastro (pode ter várias, separadas por / , ; + |) e Acessos de portal */
+  function instsDoAluno(c) {
+    var L = String(c.fac || '').split(/\s*[\/;,+|]\s*/);
+    CA.M().access.forEach(function (a) { if (a.cid === c.id && a.fac) L.push(a.fac); });
+    return L.map(function (x) { return String(x || '').replace(/\s+/g, ' ').trim(); }).filter(function (x) { return x.length >= 2; });
+  }
+  function instRow(nome) {
+    return '<div class="pt-inst"><div class="pt-inst-h"><b class="pt-inst-n">Instituição</b><button type="button" class="btn-ghost sm danger" data-rmi aria-label="Remover esta instituição">' + ic('x') + 'Remover</button></div>'
+      + '<div class="form-grid">'
+      + '<div class="field"><label>Nome da instituição</label><input data-f="inst" list="pIList" autocomplete="off" value="' + esc(nome) + '"></div>'
+      + '<div class="field"><label>Endereço do portal (opcional)</label><input data-f="url" type="url" inputmode="url" placeholder="https://…"></div>'
+      + '<div class="field"><label>Curso (opcional)</label><input data-f="curso" type="text"></div>'
+      + '<div class="field"><label>Matrícula (opcional)</label><input data-f="matr" type="text" autocomplete="off"></div>'
+      + '</div></div>';
+  }
+  function lerInsts(m) {
+    var out = [], vistos = {};
+    [].forEach.call(m.querySelectorAll('.pt-inst'), function (r, i) {
+      var g = function (k) { return r.querySelector('[data-f=' + k + ']').value.trim().replace(/\s+/g, ' '); };
+      var n = { inst: g('inst'), urlRaw: g('url'), curso: g('curso'), matr: g('matr') }, rot = m.querySelectorAll('.pt-inst').length > 1 ? 'Instituição ' + (i + 1) : 'Instituição';
+      if (!n.inst && !n.urlRaw && !n.curso && !n.matr) return; // linha extra deixada em branco
+      if (n.inst.length < 2) fail(rot + ': informe o nome da instituição.');
+      n.url = safeUrl(n.urlRaw); if (n.urlRaw && !n.url) fail(rot + ' (' + n.inst + '): endereço do portal inválido. Use um link que comece com https://');
+      var k = CA.normS(n.inst).trim(); if (vistos[k]) fail('A instituição ' + n.inst + ' foi informada duas vezes.'); vistos[k] = 1;
+      out.push(n);
+    });
+    if (!out.length) fail('Informe a instituição do portal.');
+    return out;
   }
   function histPush(h, e) {
     h = Array.isArray(h) ? h.filter(function (x) { return x && x.id !== e.id; }) : [];
