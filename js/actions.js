@@ -60,6 +60,8 @@
       case 'pnTk': CA.painelDrawer('tk'); break;
       case 'heroN': trocarPeriodo(+g('data-k')); break;
       case 'yoyMetric': CA.S.ui.yoyMetric = g('data-k'); CA.render(); break;
+      case 'evoPer': CA.S.ui.evoPer = g('data-k'); CA.render(); break;
+      case 'evoSel': CA.S.ui.evoSel = g('data-k'); CA.render(); break;
     }
   };
   function copy(v) {

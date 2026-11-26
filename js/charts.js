@@ -72,7 +72,7 @@
   CA.mountCharts = function (root) {
     CA.fitTimeline(root);
     CA.fitLists(root); // síncrono: evita itens aparecerem e sumirem (piscada)
-    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : cfg.kind === 'analise' ? drawAnalise : cfg.kind === 'mini' ? drawMini : cfg.kind === 'ystack' ? drawYStack : draw)(box, cfg); });
+    (root || document).querySelectorAll('.chart-box[data-chart]').forEach(function (box) { var cfg = REG[box.getAttribute('data-chart')]; if (cfg) (cfg.kind === 'hero' ? drawHero : cfg.kind === 'bars' ? drawBars : cfg.kind === 'analise' ? drawAnalise : cfg.kind === 'mini' ? drawMini : cfg.kind === 'ystack' ? drawYStack : cfg.kind === 'gbars' ? drawGBars : cfg.kind === 'donut' ? drawDonut : draw)(box, cfg); });
   };
   var rT;
   window.addEventListener('resize', function () { clearTimeout(rT); rT = setTimeout(function () { CA.mountCharts(); }, 150); });
@@ -386,6 +386,103 @@
       + '<circle class="g-v" cx="50" cy="50" r="' + r + '" stroke-dasharray="' + (arc * p2 / 100) + ' ' + c + '"/></g></svg>'
       + '<b class="num">' + txt + '</b></div><div class="g-txt"><span class="g-l">' + esc(label) + '</span>' + (sub ? '<span class="g-s">' + sub + '</span>' : '') + '</div></div>';
   };
+
+  /* ===== Colunas agrupadas com seleção, rótulos de valor e faixas (histórico / projeção) =====
+     cfg = { kind:'gbars', labels:[..], series:[{name,color,values}], sel:i, onPick:fn(i), valueLabels:'all'|'sel'|'none',
+             proj:[bool], brackets:[{a,b,label}], tick:fn(i), tip:fn(i), height, barMax } */
+  function short(v) {
+    var a = Math.abs(v), sg = v < 0 ? '−' : '';
+    if (a >= 1e6) return sg + 'R$ ' + (a / 1e6).toFixed(1).replace('.', ',') + ' mi';
+    if (a >= 1e4) return sg + 'R$ ' + Math.round(a / 1e3) + ' mil';
+    if (a >= 1e3) return sg + 'R$ ' + (a / 1e3).toFixed(1).replace('.', ',') + ' mil';
+    return sg + 'R$ ' + Math.round(a);
+  }
+  CA.shortBRL = short;
+  function drawGBars(box, cfg) {
+    var W = Math.max(280, box.clientWidth), H = cfg.height || 300, mobile = W < 560;
+    var n = cfg.labels.length; if (!n) { box.innerHTML = '<div class="empty">Sem dados para o período.</div>'; return; }
+    var ser = cfg.series, ns = ser.length, vmode = cfg.valueLabels || 'none';
+    var R = 8, T = vmode === 'none' ? 12 : 26, B = 30 + (cfg.brackets && cfg.brackets.length ? 34 : 0);
+    var mx = 0, mn = 0; ser.forEach(function (sr) { sr.values.forEach(function (v) { if (v != null && isFinite(v)) { mx = Math.max(mx, v); mn = Math.min(mn, v); } }); });
+    var nk = nice(mx || 1, mn), fmt = cfg.yfmt || short, L = Math.max(44, axisW(nk, mobile, fmt) - 6);
+    var y = function (v) { return T + (H - T - B) * (1 - (v - nk.lo) / ((nk.hi - nk.lo) || 1)); };
+    var step = (W - L - R) / n, cx = function (i) { return L + step * i + step / 2; };
+    var gw = Math.min(step * .76, cfg.barMax || 64), gap = ns > 1 ? 2 : 0, bw = (gw - gap * (ns - 1)) / ns;
+    var s = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(cfg.aria || 'Gráfico de colunas') + '">';
+    s += '<defs><pattern id="hatch-' + esc(box.getAttribute('data-chart')) + '" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="hatch"/></pattern></defs>';
+    for (var v = nk.lo; v <= nk.hi + 1e-6; v += nk.step) s += '<line class="gl' + (Math.abs(v) < 1e-6 ? ' z' : '') + '" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="yt" x="' + (L - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmt(v)) + '</text>';
+    if (cfg.sel != null && cfg.sel >= 0 && cfg.sel < n) s += '<rect class="selbox" x="' + (cx(cfg.sel) - Math.min(step / 2 - 1, gw / 2 + 8)) + '" y="' + (T - (vmode === 'none' ? 4 : 22)) + '" width="' + (Math.min(step - 2, gw + 16)) + '" height="' + (H - B - T + (vmode === 'none' ? 8 : 26)) + '" rx="8"/>';
+    var labs = '';
+    for (var i = 0; i < n; i++) {
+      var pj = cfg.proj && cfg.proj[i], hasSel = cfg.sel != null && cfg.sel >= 0, dim = hasSel && cfg.dimOthers && i !== cfg.sel;
+      ser.forEach(function (sr, k) {
+        var val = sr.values[i]; if (val == null || !isFinite(val)) return;
+        var x0 = cx(i) - gw / 2 + k * (bw + gap), y0 = y(Math.max(0, val)), y1 = y(Math.min(0, val)), h = Math.max(0, y1 - y0);
+        var st = 'fill:' + (pj ? 'url(#hatch-' + esc(box.getAttribute('data-chart')) + ')' : sr.color) + ';color:' + sr.color + (pj ? ';stroke:' + sr.color + ';stroke-width:1.2' : '') + (dim ? ';opacity:.55' : '');
+        s += h > 0 ? '<path class="gb" d="' + topRound(x0, y0, bw, h, Math.min(4, bw / 2)) + '" style="' + st + '"/>' : '';
+        if (!val || !(vmode === 'all' || vmode === 'sel' && i === cfg.sel)) return;
+        var t = cfg.vfmt ? cfg.vfmt(val) : short(val), tw = t.length * 6.1;
+        if (tw <= bw + gap + 2) labs += '<text class="vlab pv on" x="' + (x0 + bw / 2) + '" y="' + (y0 - 6) + '" text-anchor="middle">' + esc(t) + '</text>';
+        else if (k === 0 && tw <= step - 4 + (i === cfg.sel ? 16 : 0)) { var top = y0; ser.forEach(function (o) { var w = o.values[i]; if (w != null && w > 0) top = Math.min(top, y(w)); }); labs += '<text class="vlab pv on" x="' + cx(i) + '" y="' + (top - 6) + '" text-anchor="middle">' + esc(t) + '</text>'; }
+      });
+    }
+    s += labs;
+    var every = Math.max(1, Math.ceil(n / (mobile ? 6 : 14)));
+    for (i = 0; i < n; i++) {
+      if (cfg.sel != null && cfg.sel >= 0 && i !== cfg.sel && Math.abs(i - cfg.sel) < every && n > 14) continue;
+      var tl = cfg.ticks ? cfg.ticks(i, every, mobile) : (i % every === 0 ? cfg.labels[i] : '');
+      if (tl) s += '<text class="xt' + (i === cfg.sel ? ' on' : '') + '" x="' + cx(i) + '" y="' + (H - B + 19) + '" text-anchor="middle">' + esc(tl) + '</text>';
+    }
+    (cfg.brackets || []).forEach(function (bk) {
+      var x1 = L + step * bk.a + 8, x2 = L + step * (bk.b + 1) - 8, yb = H - 26;
+      if (x2 - x1 < 20) return;
+      s += '<line class="brk" x1="' + x1 + '" x2="' + x2 + '" y1="' + yb + '" y2="' + yb + '"/><path class="brkd" d="M' + x1 + ',' + (yb - 3) + 'l3,3l-3,3l-3,-3zM' + x2 + ',' + (yb - 3) + 'l3,3l-3,3l-3,-3z"/>'
+        + '<text class="brkt" x="' + ((x1 + x2) / 2) + '" y="' + (yb + 18) + '" text-anchor="middle">' + esc(bk.label) + '</text>';
+    });
+    s += '<rect class="hit" x="' + L + '" y="0" width="' + (W - L - R) + '" height="' + (H - B + 26) + '" fill="transparent"' + (cfg.onPick ? ' style="cursor:pointer"' : '') + '/></svg><div class="tip" hidden></div>';
+    box.innerHTML = s;
+    var svg = box.querySelector('svg'), tip = box.querySelector('.tip'), last = -1;
+    function idx(clientX) { var r = svg.getBoundingClientRect(); return Math.max(0, Math.min(n - 1, Math.floor((clientX - r.left - L) / step))); }
+    function show(clientX) {
+      if (!cfg.tip) return; var i = idx(clientX); if (i === last) return; last = i;
+      tip.innerHTML = cfg.tip(i) + (cfg.onPick && i !== cfg.sel ? '<div class="tf">Clique para detalhar este ' + (cfg.pickWord || 'mês') + '</div>' : ''); tip.hidden = false;
+      var tw = tip.offsetWidth, left = cx(i) + gw / 2 + 10; if (left + tw > W - 4) left = cx(i) - gw / 2 - tw - 10; if (left < 4) left = 4;
+      tip.style.left = left + 'px';
+    }
+    function hide() { tip.hidden = true; last = -1; }
+    svg.addEventListener('pointermove', function (e) { if (e.pointerType === 'mouse') show(e.clientX); });
+    svg.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') hide(); });
+    svg.addEventListener('click', function (e) { var i = idx(e.clientX); if (cfg.onPick && i !== cfg.sel) { hide(); cfg.onPick(i); } else { last = -1; show(e.clientX); } });
+  }
+
+  /* ===== Rosca com fatias separadas por um vão e detalhe ao passar o mouse =====
+     cfg = { kind:'donut', slices:[{label,value,color}], center:{v,l}, size } */
+  function drawDonut(box, cfg) {
+    var sl = (cfg.slices || []).filter(function (x) { return x.value > 0; }), tot = sl.reduce(function (t, x) { return t + x.value; }, 0);
+    var S = Math.min(cfg.size || 200, Math.max(140, box.clientWidth)), r = S / 2 - 4, ri = r * .64, c = S / 2;
+    if (!tot) { box.innerHTML = '<div class="empty">' + esc(cfg.emptyText || 'Sem valores neste mês') + '</div>'; return; }
+    var s = '<svg width="' + S + '" height="' + S + '" viewBox="0 0 ' + S + ' ' + S + '" role="img" aria-label="' + esc(cfg.aria || 'Gráfico de rosca') + '">', a0 = -Math.PI / 2;
+    function pt(a, rr) { return (c + rr * Math.cos(a)).toFixed(2) + ',' + (c + rr * Math.sin(a)).toFixed(2); }
+    sl.forEach(function (x, k) {
+      var frac = x.value / tot, a1 = a0 + frac * Math.PI * 2;
+      if (sl.length === 1) s += '<circle class="dn" data-k="0" cx="' + c + '" cy="' + c + '" r="' + ((r + ri) / 2) + '" style="fill:none;stroke:' + x.color + ';stroke-width:' + (r - ri) + '"/>';
+      else { var big = a1 - a0 > Math.PI ? 1 : 0; s += '<path class="dn" data-k="' + k + '" d="M' + pt(a0, r) + 'A' + r + ',' + r + ' 0 ' + big + ' 1 ' + pt(a1, r) + 'L' + pt(a1, ri) + 'A' + ri + ',' + ri + ' 0 ' + big + ' 0 ' + pt(a0, ri) + 'Z" style="fill:' + x.color + '"/>'; }
+      a0 = a1;
+    });
+    s += '</svg>';
+    var ctr = cfg.center ? '<div class="dn-c"><b class="num pv">' + esc(cfg.center.v) + '</b><span>' + esc(cfg.center.l) + '</span></div>' : '';
+    box.innerHTML = '<div class="dn-w" style="width:' + S + 'px;height:' + S + 'px">' + s + ctr + '</div><div class="tip" hidden></div>';
+    var tip = box.querySelector('.tip'), wrap = box.querySelector('.dn-w');
+    box.querySelectorAll('.dn').forEach(function (el) {
+      function on(e) {
+        var x = sl[+el.getAttribute('data-k')]; wrap.classList.add('hov'); box.querySelectorAll('.dn').forEach(function (o) { o.classList.toggle('on', o === el); });
+        tip.innerHTML = CA.tipMonth(x.label, [['Valor', CA.brl(x.value), x.color], ['Participação', (Math.round(x.value / tot * 1000) / 10).toString().replace('.', ',') + '%', 'transparent']]); tip.hidden = false;
+        var r0 = box.getBoundingClientRect(), left = e.clientX - r0.left + 14; if (left + tip.offsetWidth > box.clientWidth) left = e.clientX - r0.left - tip.offsetWidth - 14; tip.style.left = Math.max(0, left) + 'px'; tip.style.top = Math.max(0, e.clientY - r0.top - 20) + 'px';
+      }
+      el.addEventListener('pointermove', on); el.addEventListener('pointerdown', on);
+      el.addEventListener('pointerleave', function () { tip.hidden = true; wrap.classList.remove('hov'); el.classList.remove('on'); });
+    });
+  }
 
   /* Quadro de detalhe padrão de um mês */
   CA.tipMonth = function (title, rows, foot) {
