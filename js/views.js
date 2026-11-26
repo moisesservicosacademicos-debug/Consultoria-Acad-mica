@@ -207,7 +207,7 @@
   function mensRow(x) {
     return '<button type="button" class="row" data-act="cli" data-cid="' + esc(x.cid) + '">' + when(x.prox, x.dias)
       + '<div class="main"><b>' + esc(x.nome) + '</b><span>' + (x.faixa === 'atraso' ? 'Venceu há ' + (-x.dias) + (x.dias === -1 ? ' dia' : ' dias') : prazoTxt(x.dias)) + (x.ult ? ' · último pagamento ' + CA.dshort(x.ult) : '') + '</span></div>'
-      + '<div class="val num">' + brl(x.valor) + '</div></button>';
+      + '<div class="val num">' + brl(x.cobrar) + (x.pagoAberto > 0 ? '<small>falta de ' + brl(x.valor) + '</small>' : '') + '</div></button>';
   }
   function finRow(f) {
     var isOut = f.tipo === 'desp';
@@ -239,7 +239,7 @@
     // KPIs
     var kpi = function (lb, vl, ft, icon, cls, go) { return '<button type="button" class="ek' + (cls ? ' ' + cls : '') + '" data-go="' + go + '"><span class="ek-t"><span class="ek-l">' + lb + '</span><b class="num pv">' + vl + '</b><small>' + ft + '</small></span><span class="ek-i">' + icon + '</span></button>'; };
     var nEnt = M.prazos.length, nAtr = M.prazos.filter(function (p) { return p.dias < 0; }).length;
-    var atrVal = M.atrasados.reduce(function (t, x) { return t + x.valor; }, 0);
+    var atrVal = M.atrasados.reduce(function (t, x) { return t + x.cobrar; }, 0);
     out += '<div class="ek-row">'
       + kpi('Receita de ' + mesNome, brl(M.now.rec), Math.round(media ? M.now.rec / media * 100 : 0) + '% da média · projeção <span class="pv">' + brl(proj) + '</span>', '<svg viewBox="0 0 24 24" class="tr up"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>', '', 'financeiro/resumo')
       + kpi('Despesas de ' + mesNome, brl(M.now.desp), 'lucro do mês <span class="pv">' + brl(M.now.res) + '</span>', '<svg viewBox="0 0 24 24" class="tr dn"><path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/></svg>', '', 'financeiro/despesas')
@@ -263,8 +263,8 @@
     var ord = { atraso: 0, breve: 1, semdata: 2, emdia: 3 };
     var mens = M.rcl.filter(function (x) { return x.status === 'Ativo'; }).sort(function (a, b) { return (ord[a.faixa] - ord[b.faixa]) || String(a.prox).localeCompare(String(b.prox)); }).map(function (x) {
       var c = x.faixa === 'atraso' ? 'var(--c-red)' : x.faixa === 'breve' ? 'var(--c-yellow)' : 'var(--c-green)';
-      var sub = x.faixa === 'atraso' ? 'venceu ' + CA.dshort(x.prox).replace(' ', '/') : x.prox ? 'vence ' + CA.dshort(x.prox).replace(' ', '/') : 'sem vencimento';
-      return '<button type="button" class="el" data-act="cli" data-cid="' + esc(x.cid) + '"><span class="st" style="--c:' + c + '"><svg viewBox="0 0 24 24">' + (x.faixa === 'atraso' ? '<path d="M12 6v7M12 17.5v.5"/>' : x.faixa === 'breve' ? '<path d="M12 7v5l3 2"/>' : '<path d="m6 12 4 4 8-8"/>') + '</svg></span><span class="el-t"><b>' + esc(x.nome) + '</b><small>' + sub + '</small></span><span class="el-v num pv">' + brl(x.valor) + '</span></button>';
+      var sub = (x.faixa === 'atraso' ? 'venceu ' + CA.dshort(x.prox).replace(' ', '/') : x.prox ? 'vence ' + CA.dshort(x.prox).replace(' ', '/') : 'sem vencimento') + (x.pagoAberto > 0 ? ' · ' + brl(x.pagoAberto) + ' adiantado' : '');
+      return '<button type="button" class="el" data-act="cli" data-cid="' + esc(x.cid) + '"><span class="st" style="--c:' + c + '"><svg viewBox="0 0 24 24">' + (x.faixa === 'atraso' ? '<path d="M12 6v7M12 17.5v.5"/>' : x.faixa === 'breve' ? '<path d="M12 7v5l3 2"/>' : '<path d="m6 12 4 4 8-8"/>') + '</svg></span><span class="el-t"><b>' + esc(x.nome) + '</b><small>' + sub + '</small></span><span class="el-v num pv">' + brl(x.cobrar) + '</span></button>';
     }).join('');
     out += '<section class="ec ec-me">' + eh('Mensalistas', 'mensalidades/situacao', '<span class="eh-c">' + M.ativos.length + '</span>') + '<div class="el-list fitl">' + (mens || '<p class="e-empty">Nenhum mensalista ativo.</p>') + '</div></section>';
     // Receita por tipo (rosca)
@@ -290,7 +290,7 @@
     var ev = [];
     M.prazos.forEach(function (p) { if (!CA.isISO(p.prazo)) return; ev.push({ t: 'ent', d: p.prazo, dias: p.dias, nome: p.nome, tit: p.titulo, sub: p.kind === 'sv' ? p.sid : 'entrega', act: p.kind === 'sv' ? 'sv' : 'dl', uid: p.kind === 'sv' ? p.s.uid : p.x.uid }); });
     M.schedules.forEach(function (s) { if (!s.open || !CA.isISO(s.data)) return; ev.push({ t: 'ag', d: s.data, dias: s.dias, nome: s.nome, tit: s.desc || s.tipo || 'Compromisso', sub: (s.tipo || 'agenda').toLowerCase() + (s.hora ? ' · ' + s.hora : ''), act: 'sch', uid: s.uid }); });
-    M.rcl.forEach(function (x) { if (x.faixa !== 'atraso' && x.faixa !== 'breve') return; ev.push({ t: 'cob', d: x.prox, dias: x.dias, nome: x.nome, tit: 'Mensalidade de ' + x.nome, sub: (x.faixa === 'atraso' ? 'venceu ' : 'vence ') + CA.dshort(x.prox).replace(' ', '/') + ' · cobrança', valor: x.valor, act: 'cli', cid: x.cid }); });
+    M.rcl.forEach(function (x) { if (x.faixa !== 'atraso' && x.faixa !== 'breve') return; ev.push({ t: 'cob', d: x.prox, dias: x.dias, nome: x.nome, tit: 'Mensalidade de ' + x.nome, sub: (x.faixa === 'atraso' ? 'venceu ' : 'vence ') + CA.dshort(x.prox).replace(' ', '/') + ' · cobrança' + (x.pagoAberto > 0 ? ' do restante' : ''), valor: x.cobrar, act: 'cli', cid: x.cid }); });
     // agrupa entregas e agenda da mesma pessoa no mesmo dia
     var grp = {}, list = [];
     ev.forEach(function (e) {
@@ -503,11 +503,11 @@
     defs.forEach(function (d) {
       var items = M.rcl.filter(function (x) { return x.faixa === d[0]; });
       if (!items.length) return;
-      var tot = items.reduce(function (t, x) { return t + x.valor; }, 0);
+      var tot = items.reduce(function (t, x) { return t + (x.status === 'Ativo' ? x.cobrar : x.valor); }, 0);
       var rows = items.map(function (x) {
         var act = x.status === 'Ativo' ? lbtn(ic('coin') + 'Registrar', 'payMens', ' data-cid="' + esc(x.cid) + '"') : lbtn(ic('play') + 'Reativar', 'reactivate', ' data-uid="' + esc(x.uid) + '"');
         return '<tr class="click" data-act="cli" data-cid="' + esc(x.cid) + '" tabindex="0"><td><span class="strong">' + esc(x.nome) + '</span><span class="sub">' + esc(x.cid) + (x.dia ? ' · vence todo dia ' + x.dia : '') + '</span></td>'
-          + '<td class="r num">' + brl(x.valor) + '</td><td class="hide-m num">' + (x.prox ? dbr(x.prox) : '—') + (x.status === 'Ativo' && x.dias !== null ? '<span class="sub">' + prazoTxt(x.dias) + '</span>' : '') + '</td><td class="hide-m num">' + (x.ult ? dbr(x.ult) : '—') + '</td><td class="act">' + act + '</td></tr>';
+          + '<td class="r num">' + (x.status === 'Ativo' && x.pagoAberto > 0 ? brl(x.cobrar) + '<span class="sub">falta · ' + brl(x.pagoAberto) + ' já adiantado de ' + brl(x.valor) + '</span>' : brl(x.valor)) + '</td><td class="hide-m num">' + (x.prox ? dbr(x.prox) : '—') + (x.status === 'Ativo' && x.dias !== null ? '<span class="sub">' + prazoTxt(x.dias) + '</span>' : '') + '</td><td class="hide-m num">' + (x.ult ? dbr(x.ult) : '—') + '</td><td class="act">' + act + '</td></tr>';
       }).join('');
       out += grp('rc-' + d[0], d[1], '', items.length, d[2], brl(tot), '<div class="tbl-wrap"><table class="tbl stack"><thead><tr><th>Mensalista</th><th class="r">Valor</th><th>Próximo vencimento</th><th>Último pagamento</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>');
     });
@@ -519,15 +519,16 @@
     var pagos = M.rpay.filter(function (p) { return p.comp === ym; });
     var pagosCid = {}; pagos.forEach(function (p) { pagosCid[p.cid] = (pagosCid[p.cid] || 0) + p.valor; });
     var ativos = M.rcl.filter(function (x) { return x.status === 'Ativo'; });
-    var pend = ativos.filter(function (x) { return !pagosCid[x.cid]; });
-    var totPago = pagos.reduce(function (t, p) { return t + p.valor; }, 0), totPend = pend.reduce(function (t, x) { return t + x.valor; }, 0);
+    var falta = {}; ativos.forEach(function (x) { falta[x.cid] = M.restanteComp(x, ym); });
+    var pend = ativos.filter(function (x) { return falta[x.cid] > 0; });
+    var totPago = pagos.reduce(function (t, p) { return t + p.valor; }, 0), totPend = pend.reduce(function (t, x) { return t + falta[x.cid]; }, 0);
     var out = head('Competência do mês', 'Quem já pagou e quem falta pagar a mensalidade de ' + esc(CA.ymLabel(ym).toLowerCase()) + '.', monthNav('mcomp', ym));
     out += '<div class="grid" style="margin-bottom:16px"><div class="panel c4"><div class="kpi"><span class="lb">Pago nesta competência</span><span class="vl num pv in">' + brl(totPago) + '</span><span class="ft">' + pagos.length + ' pagamentos</span></div></div>'
       + '<div class="panel c4"><div class="kpi"><span class="lb">Falta receber</span><span class="vl num pv ' + (totPend ? 'warn' : '') + '">' + brl(totPend) + '</span><span class="ft">' + pend.length + ' mensalistas</span></div></div>'
       + '<div class="panel c4"><div class="kpi"><span class="lb">Adimplência</span><span class="vl num">' + (ativos.length ? Math.round((ativos.length - pend.length) / ativos.length * 100) : 0) + '%</span><span class="ft">dos mensalistas ativos</span></div></div></div>';
     var rowsP = pend.map(function (x) {
       var due = x.dia ? CA.dueIn(ym, x.dia) : '';
-      return '<tr class="click" data-act="cli" data-cid="' + esc(x.cid) + '" tabindex="0"><td><span class="strong">' + esc(x.nome) + '</span><span class="sub">vence ' + (due ? dbr(due) : '—') + '</span></td><td class="r num">' + brl(x.valor) + '</td><td class="act">' + lbtn(ic('coin') + 'Registrar', 'payMens', ' data-cid="' + esc(x.cid) + '" data-comp="' + ym + '"') + '</td></tr>';
+      return '<tr class="click" data-act="cli" data-cid="' + esc(x.cid) + '" tabindex="0"><td><span class="strong">' + esc(x.nome) + '</span><span class="sub">vence ' + (due ? dbr(due) : '—') + '</span></td><td class="r num">' + brl(falta[x.cid]) + (pagosCid[x.cid] ? '<span class="sub">' + brl(pagosCid[x.cid]) + ' já pago de ' + brl(x.valor) + '</span>' : '') + '</td><td class="act">' + lbtn(ic('coin') + 'Registrar', 'payMens', ' data-cid="' + esc(x.cid) + '" data-comp="' + ym + '"') + '</td></tr>';
     }).join('');
     var rowsOk = pagos.map(function (p) {
       return '<tr><td><span class="strong">' + esc(CA.clientName(p.cid, p.nome)) + '</span><span class="sub">pago em ' + dbr(p.data) + ' · ' + esc(p.forma) + '</span></td><td class="r num">' + brl(p.valor) + '</td><td class="act">' + lbtn(ic('undo') + 'Estornar', 'undoMens', ' data-uid="' + esc(p.uid) + '"', 'danger') + '</td></tr>';
@@ -608,7 +609,9 @@
       out += grp('cat-' + k, k, '', by[k].length, 'act', '', '<div class="tbl-wrap"><table class="tbl stack"><thead><tr><th>Serviço</th><th class="r">Referência</th><th class="r">Promocional</th><th class="r">Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>');
     });
     if (!M.catalog.length) out += '<div class="panel">' + empty('Catálogo vazio') + '</div>';
-    return out + '</div>';
+    out += '</div>';
+    if (M.catalogFora.length) out += '<p class="muted tbl-note" style="margin-top:14px">' + M.catalogFora.length + (M.catalogFora.length === 1 ? ' item que não é serviço ficou fora' : ' itens que não são serviços ficaram fora') + ' do catálogo (' + esc(M.catalogFora.map(function (c) { return c.nome; }).join(', ')) + '). Assinaturas e outros custos se lançam em ' + lbtn(ic('receipt') + 'Lançar despesa', 'newDesp') + '; adiantamentos de alunos, em Registrar mensalidade ou no recebimento do serviço.</p>';
+    return out;
   };
 
   /* ---------- Financeiro ---------- */

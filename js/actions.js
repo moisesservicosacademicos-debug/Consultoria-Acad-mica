@@ -96,7 +96,8 @@
     if (rc) {
       body += '<section class="panel"><div class="panel-h"><h2>Mensalidade</h2>' + CA.chipFaixa(rc) + '</div><div class="panel-b"><dl class="facts">'
         + '<div><dt>Valor do plano</dt><dd class="num pv">' + brl(rc.valor) + '</dd></div><div><dt>Vencimento</dt><dd>' + (rc.dia ? 'Todo dia ' + rc.dia : '—') + '</dd></div>'
-        + '<div><dt>Próximo vencimento</dt><dd class="num">' + (rc.prox ? dbr(rc.prox) : '—') + '</dd></div><div><dt>Último pagamento</dt><dd class="num">' + (rc.ult ? dbr(rc.ult) : '—') + '</dd></div></dl>'
+        + '<div><dt>Próximo vencimento</dt><dd class="num">' + (rc.prox ? dbr(rc.prox) : '—') + '</dd></div><div><dt>Último pagamento</dt><dd class="num">' + (rc.ult ? dbr(rc.ult) : '—') + '</dd></div>'
+        + (rc.status === 'Ativo' && rc.pagoAberto > 0 ? '<div><dt>Já adiantado de ' + esc(CA.ymShort(rc.compAberta).toLowerCase()) + '</dt><dd class="num pv in">' + brl(rc.pagoAberto) + '</dd></div><div><dt>Falta cobrar</dt><dd class="num pv warn">' + brl(rc.cobrar) + '</dd></div>' : '') + '</dl>'
         + '<div class="drawer-actions" style="margin-top:12px">' + '<button class="btn-ghost sm" data-a="plan">' + ic('edit') + 'Alterar plano</button>'
         + (rc.status === 'Ativo' ? '<button class="btn-ghost sm" data-a="pause">' + ic('pause') + 'Pausar cobrança</button>' : '<button class="btn-ghost sm" data-a="react">' + ic('play') + 'Reativar</button>') + '</div></div></section>';
     }
@@ -314,24 +315,27 @@
           var x = M.rcByCid[val(m, 'mC')]; if (!x) { m.querySelector('#mInfo').hidden = true; return; }
           if (!keepComp || !val(m, 'mComp')) {
             var last = M.rpay.filter(function (p) { return p.cid === x.cid && p.comp; }).map(function (p) { return p.comp; }).sort().pop();
-            m.querySelector('#mComp').value = last ? CA.ymAdd(last, 1) : (x.prox ? x.prox.slice(0, 7) : CA.today().slice(0, 7));
+            m.querySelector('#mComp').value = x.compAberta && M.restanteComp(x, x.compAberta) > 0 ? x.compAberta : last ? CA.ymAdd(last, 1) : (x.prox ? x.prox.slice(0, 7) : CA.today().slice(0, 7));
           }
-          if (!val(m, 'mV')) m.querySelector('#mV').value = String(x.valor).replace('.', ',');
+          var cc = val(m, 'mComp'), rest0 = /^\d{4}-\d{2}$/.test(cc) ? M.restanteComp(x, cc) : x.valor;
+          if (!val(m, 'mV')) m.querySelector('#mV').value = String(rest0 > 0 ? rest0 : x.valor).replace('.', ',');
           m.querySelector('#mF').value = CA.FORMAS.indexOf(x.forma) >= 0 ? x.forma : 'Pix';
           info();
         };
         var info = function () {
           var x = M.rcByCid[val(m, 'mC')], c = val(m, 'mComp'), box = m.querySelector('#mInfo');
           if (!x || !/^\d{4}-\d{2}$/.test(c)) { box.hidden = true; return; }
-          var dup = M.rpay.some(function (p) { return p.cid === x.cid && p.comp === c; });
-          var prox = x.dia ? CA.proxVenc(c, x.dia) : '';
-          if (x.prox && prox && x.prox > prox) prox = x.prox;
+          var rest = M.restanteComp(x, c), pago = M.pagosComp(x.cid, c).reduce(function (t, p) { return t + p.valor; }, 0);
+          var plano = planoMens(M, x, c, CA.numOrNaN(val(m, 'mV')));
           box.hidden = false;
-          box.innerHTML = '<span>Plano de <b>' + brl(x.valor) + '</b>, vence todo dia ' + (x.dia || '—') + '.</span><span>Último pagamento: <b>' + (x.ult ? dbr(x.ult) : 'nenhum') + '</b>. Próximo vencimento depois deste: <b>' + (prox ? dbr(prox) : '—') + '</b>.</span>'
-            + (dup ? '<span class="out"><b>Já existe pagamento desta competência.</b> Escolha outro mês ou estorne o anterior.</span>' : '');
+          box.innerHTML = '<span>Plano de <b>' + brl(x.valor) + '</b>, vence todo dia ' + (x.dia || '—') + '. Último pagamento: <b>' + (x.ult ? dbr(x.ult) : 'nenhum') + '</b>.</span>'
+            + (rest <= 0 ? '<span class="out"><b>' + esc(CA.ymShort(c)) + ' já está quitada.</b> Escolha outro mês ou estorne o pagamento anterior.</span>'
+              : (pago > 0 ? '<span>Já pago de ' + esc(CA.ymShort(c).toLowerCase()) + ': <b>' + brl(pago) + '</b>. Falta <b>' + brl(rest) + '</b>.</span>' : '')
+              + (plano.partes.length ? '<span>' + plano.partes.map(function (p) { return esc(CA.ymShort(p.comp)) + ': <b>' + brl(p.valor) + '</b> ' + (p.quita ? '(quita o mês)' : '(parcial, falta ' + brl(p.falta) + ')'); }).join(' · ') + '</span><span>Próximo vencimento depois deste: <b>' + (plano.prox ? dbr(plano.prox) : '—') + '</b>' + (plano.ultParcial ? ', cobrando só o restante de <b>' + brl(plano.ultParcial) + '</b>' : '') + '.</span>' : ''));
         };
         m.querySelector('#mC').onchange = function () { m.querySelector('#mV').value = ''; fill(false); };
-        m.querySelector('#mComp').onchange = info;
+        m.querySelector('#mComp').onchange = function () { var x = M.rcByCid[val(m, 'mC')]; if (x && /^\d{4}-\d{2}$/.test(val(m, 'mComp'))) { var r = M.restanteComp(x, val(m, 'mComp')); if (r > 0) m.querySelector('#mV').value = String(r).replace('.', ','); } info(); };
+        m.querySelector('#mV').oninput = info;
         if (cid) fill(!!comp);
         m.querySelector('#bOk').onclick = function () {
           var b = this;
@@ -345,14 +349,21 @@
             if (!CA.isISO(d)) fail('Informe a data do pagamento.');
             if (d > CA.today()) fail('A data do pagamento não pode ser no futuro.');
             if (!(v > 0)) fail('Informe o valor recebido.');
-            if (M2.rpay.some(function (p) { return p.cid === x.cid && p.comp === c; })) fail('Já existe pagamento de ' + CA.ymShort(c).toLowerCase() + ' para este mensalista.');
+            if (M2.restanteComp(x, c) <= 0) fail(CA.ymShort(c) + ' já está quitada para este mensalista. Escolha outro mês ou estorne o pagamento anterior.');
             var rcRec = recordOf(data, 'recurringClients', x.uid); if (!rcRec) fail('Ficha do mensalista não encontrada. Atualize a tela.');
-            var ops = buildMensalidade(data, rcRec, x, { comp: c, data: d, valor: v, forma: forma, obs: obsX });
-            var diff = r2(v - x.valor), sig = x.cid + '|' + v;
-            if (Math.abs(diff) > 0.005 && m.getAttribute('data-ok') !== sig) {
+            var plano = planoMens(M2, x, c, v);
+            if (plano.sobra > 0.005) fail('O valor cobre mais de 12 mensalidades. Confira o valor digitado.');
+            var ops = [], xx = Object.assign({}, x);
+            plano.partes.forEach(function (p, i) {
+              var o = buildMensalidade(data, rcRec, xx, { comp: p.comp, data: d, valor: p.valor, forma: forma, obs: obsX + (plano.partes.length > 1 ? (obsX ? ' ' : '') + 'Parte ' + (i + 1) + ' de ' + plano.partes.length + ' de um pagamento de ' + brl(v) + '.' : ''), pago: p.pagoAntes });
+              o.forEach(function (op) { if (op.dataset === 'recurringClients') { rcRec = op.record; xx.prox = CA.normDate(rcRec['Próximo Vencimento']); xx.ult = CA.normDate(rcRec['Último Pagamento']); } else ops.push(op); });
+            });
+            ops.push({ type: 'upsert', dataset: 'recurringClients', uid: rcRec._uid, record: rcRec });
+            var sig = x.cid + '|' + v + '|' + c;
+            if ((plano.ultParcial || plano.partes.length > 1) && m.getAttribute('data-ok') !== sig) {
               m.setAttribute('data-ok', sig);
               var box = m.querySelector('#mInfo'); box.hidden = false;
-              box.insertAdjacentHTML('beforeend', '<span class="warn"><b>Valor diferente do plano (' + brl(x.valor) + ').</b> ' + (diff < 0 ? 'Fica registrado como pagamento parcial, com ' + brl(-diff) + ' em aberto.' : 'O excedente de ' + brl(diff) + ' fica registrado na diferença.') + ' Toque de novo para confirmar.</span>');
+              box.insertAdjacentHTML('beforeend', '<span class="warn"><b>' + (plano.partes.length > 1 ? 'O valor passa do que falta em ' + esc(CA.ymShort(c).toLowerCase()) + '.</b> O excedente fica como adiantamento ' + (plano.partes.length > 2 ? 'dos meses seguintes' : 'de ' + esc(CA.ymShort(plano.partes[1].comp).toLowerCase())) + ' e é abatido da cobrança.' : 'Pagamento parcial.</b> O vencimento continua em ' + dbr(plano.prox) + ' e a cobrança passa a ser só do restante (' + brl(plano.ultParcial) + ').') + ' Toque de novo para confirmar.</span>');
               b.disabled = false; b.textContent = 'Confirmar com este valor'; return;
             }
             await CA.commit(ops, 'mensalidade', 'Mensalidade de ' + x.nome + ' registrada.');
@@ -362,20 +373,41 @@
       }
     });
   }
+  /* Divide um pagamento pelas competências: completa o mês escolhido e o que sobrar vira adiantamento dos meses seguintes. */
+  function planoMens(M, x, comp, v) {
+    var out = { partes: [], prox: '', ultParcial: 0, sobra: 0 };
+    if (!(v > 0) || !x || !/^\d{4}-\d{2}$/.test(comp)) return out;
+    var left = r2(v), c = comp;
+    for (var i = 0; i < 12 && left > 0.005; i++) {
+      var rest = M.restanteComp(x, c);
+      if (rest > 0.005) {
+        var pagoAntes = r2(x.valor - rest), take = r2(Math.min(left, rest));
+        out.partes.push({ comp: c, valor: take, pagoAntes: pagoAntes, quita: take >= rest - 0.005, falta: r2(rest - take) });
+        left = r2(left - take);
+      } else if (i === 0) return out;
+      c = CA.ymAdd(c, 1);
+    }
+    out.sobra = left;
+    var lp = out.partes[out.partes.length - 1];
+    if (lp && x.dia) { out.prox = lp.quita ? CA.proxVenc(lp.comp, x.dia) : CA.dueIn(lp.comp, x.dia); if (x.prox && x.prox > out.prox) out.prox = x.prox; out.ultParcial = lp.quita ? 0 : lp.falta; }
+    return out;
+  }
   function buildMensalidade(data, rcRec, x, l) {
     var ts = CA.ts(), hoje = CA.today(), dia = x.dia, rm = l.data.slice(0, 7), ant = l.comp > rm, nome = rcRec.Cliente || x.nome;
-    var calc = CA.proxVenc(l.comp, dia), prox = x.prox && x.prox > calc ? x.prox : calc;
+    var pagoAntes = r2(l.pago || 0), falta = r2(x.valor - pagoAntes - l.valor), parcial = falta > 0.005;
+    var calc = parcial ? CA.dueIn(l.comp, dia) : CA.proxVenc(l.comp, dia), prox = x.prox && x.prox > calc ? x.prox : calc;
     var ult = x.ult && x.ult > l.data ? x.ult : l.data;
     var dd = l.data.split('-').reverse().join('/'), obs;
-    if (ant) obs = 'Mensalidade de ' + CA.ymShort(l.comp).toLowerCase() + ' paga antecipadamente em ' + dd + ' via ' + l.forma + '.';
+    if (ant) obs = (parcial || pagoAntes > 0 ? 'Adiantamento de ' + brl(l.valor) + ' da mensalidade de ' : 'Mensalidade de ') + CA.ymShort(l.comp).toLowerCase() + (parcial || pagoAntes > 0 ? '' : ' paga antecipadamente') + ' em ' + dd + ' via ' + l.forma + '.' + (parcial ? ' Falta ' + brl(falta) + '.' : pagoAntes > 0 ? ' Mês quitado.' : '');
+    else if (parcial) obs = 'Pagamento parcial de ' + CA.ymShort(l.comp).toLowerCase() + ' via ' + l.forma + ' em ' + dd + '. Falta ' + brl(falta) + '.';
     else if (l.comp === rm && +l.data.slice(8, 10) > dia) { var at = +l.data.slice(8, 10) - dia; obs = 'Pagamento via ' + l.forma + ' em ' + dd + ', ' + at + (at > 1 ? ' dias' : ' dia') + ' após o vencimento (' + CA.dbr(CA.dueIn(l.comp, dia)) + ').'; }
     else obs = 'Pagamento de ' + CA.ymShort(l.comp).toLowerCase() + ' via ' + l.forma + ' em ' + dd + '.';
     if (l.obs) obs += ' ' + l.obs;
-    var diff = r2(l.valor - x.valor), parcial = diff < -0.005;
+    var diff = r2(pagoAntes + l.valor - x.valor);
     var cm = +l.comp.slice(5) - 1, rmi = +rm.slice(5) - 1, base = CA.slug(nome) + '_' + CA.stamp8(l.data) + '_' + MES3[cm] + '_' + Math.round(l.valor) + '_' + CA.rnd(4);
     var rpU = 'recurringPayments_web_' + base, feU = 'financeEntries_web_' + base, key = rcRec._clientKey || x.key, tel = rcRec.WhatsApp || x.tel || '';
     var cr = CA.creator();
-    var rp = Object.assign({ _uid: rpU, Ano: +l.comp.slice(0, 4), 'Mês': MES[cm], 'Mês Nº': cm + 1, Cliente: nome, WhatsApp: tel, _clientId: x.cid, _clientKey: key, 'Competência': l.comp + '-01', 'Observações': obs, 'Valor Recebido': l.valor, 'Forma Pagamento': l.forma, 'Tipo de pagador': 'Pessoa física', 'Data Recebimento': l.data, 'Tipo de Lançamento': ant ? 'Pagamento antecipado' : 'Pagamento mensal', 'Saldo da Mensalidade': parcial ? diff : 0, 'Diferença': diff, 'Status da Mensalidade': parcial ? 'Mensalidade parcial' : ant ? 'Mensalidade antecipada quitada' : 'Mensalidade quitada', 'Valor Mensal Previsto': x.valor, 'Data Prevista Próx. Pgto': prox, _financeUid: feU, _idempotencyKeyV470: 'recurringPayments::' + nome.toLowerCase() + '||' + l.comp + '::' + l.data + '::' + l.valor.toFixed(2) + '::pagamento mensal::' + l.forma.toLowerCase(), _createdAt: ts, _editedAt: ts }, cr);
+    var rp = Object.assign({ _uid: rpU, Ano: +l.comp.slice(0, 4), 'Mês': MES[cm], 'Mês Nº': cm + 1, Cliente: nome, WhatsApp: tel, _clientId: x.cid, _clientKey: key, 'Competência': l.comp + '-01', 'Observações': obs, 'Valor Recebido': l.valor, 'Forma Pagamento': l.forma, 'Tipo de pagador': 'Pessoa física', 'Data Recebimento': l.data, 'Tipo de Lançamento': ant ? 'Pagamento antecipado' : 'Pagamento mensal', 'Saldo da Mensalidade': parcial ? -falta : 0, 'Diferença': diff, 'Status da Mensalidade': parcial ? (ant ? 'Adiantamento parcial' : 'Mensalidade parcial') : ant ? 'Mensalidade antecipada quitada' : 'Mensalidade quitada', 'Já pago antes': pagoAntes, 'Valor Mensal Previsto': x.valor, 'Data Prevista Próx. Pgto': prox, _financeUid: feU, _idempotencyKeyV470: 'recurringPayments::' + nome.toLowerCase() + '||' + l.comp + '::' + l.data + '::' + l.valor.toFixed(2) + '::pagamento mensal::' + l.forma.toLowerCase(), _createdAt: ts, _editedAt: ts }, cr);
     var fe = Object.assign({ _uid: feU, ID: CA.maxNum(data.financeEntries, 'ID') + 1, Ano: +l.data.slice(0, 4), Data: l.data, 'Mês': MES[rmi], 'Mês Nº': rmi + 1, Status: 'Recebido', Cliente: nome, WhatsApp: tel, _linkDs: 'recurringPayments', _linkUid: rpU, _clientId: x.cid, _clientKey: key, 'Cliente vinculado': key, 'Serviço': 'Pagamento recorrente ' + nome + ' · ' + CA.ymShort(l.comp), 'Despesa/Custo': 0, 'Observações': obs, 'Valor Líquido': l.valor, 'Receita Recebida': l.valor, 'Taxas/Descontos': 0, 'Tipo de pagador': 'Pessoa física', 'Considerar no DRE?': 1, 'Forma de Pagamento': l.forma, 'Natureza do Movimento': 'Operacional', 'Classificação Financeira': 'receita operacional', _autoPaymentSig: 'recurringPayments|' + nome.toLowerCase() + '|' + l.data + '|' + l.comp + '||' + l.valor + '|pagamento mensal|' + l.forma.toLowerCase(), _createdAt: ts, _editedAt: ts }, cr);
     var em = prox < hoje, dias = CA.days(hoje, prox);
     var rc = Object.assign(rcRec, { 'Último Pagamento': ult, 'Próximo Vencimento': prox, 'Ajuste Próximo Vencimento': prox, 'Situação': em ? 'Mensalidade em atraso' : dias <= 7 ? 'Vence em até 7 dias' : 'Em dia', 'Dias p/ Próximo': dias }, CA.editor(ts));
@@ -404,7 +436,11 @@
         var lastPay = rest.map(function (x) { return CA.normDate(x['Data Recebimento']); }).filter(CA.isISO).sort().pop() || '';
         var curProx = CA.normDate(rcRec['Próximo Vencimento'] || rcRec['Ajuste Próximo Vencimento']);
         if (dia >= 1 && (!lastComp || comp >= lastComp)) {
-          var np = CA.proxVenc(lastComp && lastComp > CA.ymAdd(comp, -1) ? lastComp : CA.ymAdd(comp, -1), dia);
+          var baseC = lastComp && lastComp > CA.ymAdd(comp, -1) ? lastComp : CA.ymAdd(comp, -1);
+          var np = CA.proxVenc(baseC, dia);
+          // se a competência que sobrou ficou só com pagamentos parciais, a cobrança volta para o vencimento dela
+          var doMes = rest.filter(function (x) { return CA.normDate(x['Competência']).slice(0, 7) === baseC; }), pagoMes = doMes.reduce(function (t, x) { return t + num(x['Valor Recebido']); }, 0);
+          if (doMes.length && doMes.every(function (x) { return /parcial/i.test(x['Status da Mensalidade'] || ''); }) && pagoMes < num(rcRec['Valor Mensal']) - 0.005) np = CA.dueIn(baseC, dia);
           if (!curProx || curProx >= np) {
             var dd = CA.days(CA.today(), np);
             Object.assign(rcRec, { 'Próximo Vencimento': np, 'Ajuste Próximo Vencimento': np, 'Dias p/ Próximo': dd, 'Situação': rcRec.Status === 'Ativo' ? (dd < 0 ? 'Mensalidade em atraso' : dd <= 7 ? 'Vence em até 7 dias' : 'Em dia') : rcRec['Situação'] });
@@ -912,7 +948,7 @@
     var cats = ['TCC e artigos', 'Trabalhos acadêmicos', 'Provas e atividades', 'Formatação', 'Extensão', 'Consultoria acadêmica', 'Outros'];
     CA.modal({
       title: c ? 'Editar item do catálogo' : 'Novo item do catálogo', sub: c ? c.id : '',
-      body: '<div class="form-grid">' + field('kN', 'Serviço', inp('kN', 'text', c ? c.nome : ''), 'full') + field('kC', 'Categoria', sel('kC', opts(cats, c ? c.cat : 'Trabalhos acadêmicos'))) + field('kS', 'Status', sel('kS', opts(['Ativo', 'Inativo'], c ? c.status : 'Ativo')))
+      body: '<div class="form-grid">' + field('kN', 'Serviço', inp('kN', 'text', c ? c.nome : ''), 'full') + field('kC', 'Categoria', sel('kC', opts(cats, c ? c.cat : 'Trabalhos acadêmicos'))) + field('kS', 'Status', sel('kS', opts(['Ativo', 'Inativo', 'Arquivado'], c ? c.status : 'Ativo')))
         + field('kV', 'Valor de referência', money('kV', c ? c.valor : '')) + field('kP', 'Preço promocional', money('kP', c && c.promo ? c.promo : '')) + field('kO', 'Observações', inp('kO', 'text', c ? c.obs : ''), 'full') + '</div>' + ERR,
       foot: [{ label: 'Cancelar', id: 'bNo' }, { label: 'Salvar', cls: 'primary', id: 'bOk' }],
       mount: function (m) {
@@ -920,6 +956,7 @@
         m.querySelector('#bOk').onclick = function () {
           CA.run(this, err(m), async function () {
             var nome = val(m, 'kN'); if (!nome) fail('Informe o serviço.');
+            if (CA.M().naoServico(nome)) fail('"' + nome + '" não é um serviço prestado. Assinaturas e outros custos são lançados em Lançar despesa; adiantamentos de alunos, em Registrar mensalidade ou no recebimento do serviço.');
             var data = await CA.fresh(), ts = CA.ts(), rec;
             if (c) rec = recordOf(data, 'serviceCatalog', c.uid); else rec = Object.assign({ _uid: 'serviceCatalog_web_' + CA.slug(nome) + '_' + CA.rnd(4), 'ID Serviço Catálogo': CA.nextCode(data.serviceCatalog, 'ID Serviço Catálogo', 'CAT-'), _createdAt: ts }, CA.creator());
             var v = CA.numOrNaN(val(m, 'kV')), p = CA.numOrNaN(val(m, 'kP'));
@@ -958,7 +995,7 @@
 
   /* ================= LANÇAR / BUSCA / CONTA ================= */
   CA.launch = function () {
-    var items = [['payMens', 'coin', 'Mensalidade', 'Pagamento de mensalista', 'var(--in-soft)', 'var(--in)'], ['paySv', 'receipt', 'Recebimento de serviço', 'Entrada ou saldo de um serviço', 'var(--action-soft)', 'var(--action)'], ['newSv', 'file', 'Novo serviço', 'Trabalho com prazo e valor', 'var(--info-soft)', 'var(--info)'], ['newDesp', 'receipt', 'Despesa', 'ChatGPT, Claude, recarga…', 'var(--out-soft)', 'var(--out)'], ['newClient', 'users', 'Novo cliente', 'Cadastro na base', 'var(--surface-2)', 'var(--ink-2)'], ['newSch', 'cal', 'Agendamento', 'Prova ou compromisso', 'var(--warn-soft)', 'var(--warn)'], ['newLead', 'target', 'Contato comercial', 'Entrada no CRM', 'var(--surface-2)', 'var(--ink-2)']];
+    var items = [['payMens', 'coin', 'Mensalidade', 'Pagamento, parcial ou adiantado', 'var(--in-soft)', 'var(--in)'], ['paySv', 'receipt', 'Recebimento de serviço', 'Entrada, adiantamento ou saldo', 'var(--action-soft)', 'var(--action)'], ['newSv', 'file', 'Novo serviço', 'Trabalho com prazo e valor', 'var(--info-soft)', 'var(--info)'], ['newDesp', 'receipt', 'Despesa', 'ChatGPT, Claude, recarga…', 'var(--out-soft)', 'var(--out)'], ['newClient', 'users', 'Novo cliente', 'Cadastro na base', 'var(--surface-2)', 'var(--ink-2)'], ['newSch', 'cal', 'Agendamento', 'Prova ou compromisso', 'var(--warn-soft)', 'var(--warn)'], ['newLead', 'target', 'Contato comercial', 'Entrada no CRM', 'var(--surface-2)', 'var(--ink-2)']];
     CA.modal({
       title: 'O que você quer lançar?',
       body: '<div class="launch-grid">' + items.map(function (i) { return '<button type="button" data-l="' + i[0] + '"><span class="ic" style="background:' + i[4] + ';color:' + i[5] + '">' + ic(i[1]) + '</span><span><b>' + i[2] + '</b><span>' + i[3] + '</span></span></button>'; }).join('') + '</div>',

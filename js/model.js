@@ -33,6 +33,20 @@
       return { r: r, uid: r._uid, cid: cid, nome: r.Cliente || (c && c.nome) || '', tel: r.WhatsApp || (c && c.tel) || '', status: st, valor: num(r['Valor Mensal']), dia: dia >= 1 && dia <= 31 ? dia : null, prox: prox, ult: CA.normDate(r['Último Pagamento']), dias: dias, faixa: faixa, key: r._clientKey || (c && c.key) || '', inicio: CA.normDate(r['Início do Plano']), forma: r['Forma Preferida'] || 'Pix', obs: r['Observações'] || '' };
     }).sort(function (a, b) { return (a.prox || '9999').localeCompare(b.prox || '9999') || a.nome.localeCompare(b.nome, 'pt-BR'); });
     M.rcByCid = {}; M.rcl.forEach(function (x) { if (x.cid) M.rcByCid[x.cid] = x; });
+    /* Quanto falta pagar de uma competência: abate pagamentos parciais e adiantamentos.
+       Registros antigos sem a marca "parcial" contam como competência quitada (como foram lançados). */
+    M.pagosComp = function (cid, comp) { return M.rpay.filter(function (p) { return p.cid === cid && p.comp === comp; }); };
+    M.restanteComp = function (x, comp) {
+      var ps = M.pagosComp(x.cid, comp); if (!ps.length) return x.valor;
+      var pago = ps.reduce(function (t, p) { return t + p.valor; }, 0);
+      if (pago >= x.valor - 0.005) return 0;
+      return ps.every(function (p) { return /parcial/i.test(p.status); }) ? r2(x.valor - pago) : 0;
+    };
+    M.rcl.forEach(function (x) {
+      x.compAberta = CA.isISO(x.prox) ? x.prox.slice(0, 7) : '';
+      var rest = x.compAberta ? M.restanteComp(x, x.compAberta) : x.valor;
+      x.cobrar = rest > 0 ? rest : x.valor; x.pagoAberto = r2(x.valor - x.cobrar);
+    });
 
     /* Serviços */
     M.spay = arr(d, 'servicePayments').map(function (p) {
@@ -101,13 +115,21 @@
     M.catalog = arr(d, 'serviceCatalog').map(function (c) {
       return { r: c, uid: c._uid, id: c['ID Serviço Catálogo'] || '', nome: c['Serviço'] || '', cat: c.Categoria || 'Outros', valor: num(c['Valor Referência']), promo: c['Preço Promocional'] === '' || c['Preço Promocional'] == null ? null : num(c['Preço Promocional']), status: c.Status || 'Ativo', obs: c['Observações'] || '' };
     }).sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+    /* O catálogo mostra só serviços prestados. Assinaturas, recargas e demais despesas (nomes já lançados como despesa),
+       créditos/adiantamentos e itens arquivados ficam fora, sem apagar nada da base. */
+    var despNomes = {}; M.fin.forEach(function (f) { if (f.tipo === 'desp' && f.desc) despNomes[normS(f.desc)] = 1; });
+    var naoServ = /^(recarga|recarga telef[oô]nica|gemini( ia)?|chat ?gpt|claude|assinatura .*|servi[cç]o|outros|cr[eé]dito antecipado.*|adiantamento.*|antecipa[cç][aã]o.*)$/i;
+    M.naoServico = function (nome) { nome = String(nome || '').trim(); return !nome || naoServ.test(nome) || !!despNomes[normS(nome)]; };
+    M.catalogAll = M.catalog;
+    M.catalogFora = M.catalog.filter(function (c) { return c.status === 'Arquivado' || M.naoServico(c.nome); });
+    M.catalog = M.catalog.filter(function (c) { return M.catalogFora.indexOf(c) < 0; });
     M.access = arr(d, 'access').map(function (a) {
       return { r: a, uid: a._uid, nome: a['Nome do Aluno'] || '', fac: a.Faculdade || '', login: a['Login do Portal'] || '', senha: a['Senha do Portal'] || '', tel: a.WhatsApp || '', cid: a._clientId || '' };
     }).sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
     M.serviceNames = (function () {
-      var set = {}, bad = /^(recarga|gemini ia|servi[cç]o|outros|assinatura claude|claude|recarga telef[oô]nica|cr[eé]dito antecipado.*)$/i;
-      M.catalog.forEach(function (c) { if (c.status === 'Ativo' && c.nome && !bad.test(c.nome)) set[c.nome] = 1; });
-      M.services.forEach(function (s) { if (s.servico && !bad.test(s.servico)) set[s.servico] = 1; });
+      var set = {};
+      M.catalog.forEach(function (c) { if (c.status === 'Ativo' && c.nome) set[c.nome] = 1; });
+      M.services.forEach(function (s) { if (s.servico && !M.naoServico(s.servico)) set[s.servico] = 1; });
       return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
     })();
 
