@@ -3,7 +3,8 @@
 'use strict';
 (function (CA) {
   var esc = CA.esc, $ = CA.$;
-  var JANELA = 2;                 // dias de antecedência
+  var JANELA = 2;                 // dias de antecedência (vale para tudo o que entra na central)
+  CA.JANELA_NOTIF = JANELA;
   var REAVISO_MS = 60 * 60 * 1000; // reaviso enquanto o sistema fica aberto
   var fechadoAssin = null, fechadoEm = 0, ultimaAssin = '';
 
@@ -36,11 +37,10 @@
     if (n.dias === 1) return 'vence amanhã' + (n.hora ? ' às ' + esc(n.hora) : '');
     return 'vence em ' + n.dias + ' dias';
   }
-  /* verde: mais de 5 dias · amarelo: 3 a 5 · vermelho: até 2 · hoje · atrasado */
   /* Entregas, provas e agendamentos: aparecem a partir de 2 dias antes em amarelo (no dia, amarelo forte);
      depois que o dia passa sem resolver, ficam vermelhos. Portais seguem a escala própria de portais.js. */
   function sev(n) {
-    if (n.tipo === 'portal') return n.semProg ? 'late' : CA.ptFaixa ? CA.ptFaixa(n.dias) : n.dias < 0 ? 'late' : 'mid';
+    if (n.semProg) return 'late';
     return n.dias < 0 ? 'late' : n.dias === 0 ? 'dhoje' : 'mid';
   }
   function rotulo(n) { return n.tipo === 'portal' ? 'Portal acadêmico' : n.tipo === 'prova' ? 'Prova' : n.tipo === 'agenda' ? 'Agendamento' : 'Entrega'; }
@@ -233,8 +233,8 @@
     return '<div class="nt-h"><b>Notificações</b><span class="nt-pills">' + (L.length ? '<span class="nt-pill">' + L.length + (L.length === 1 ? ' pendência' : ' pendências') + '</span>' + (atr ? '<span class="nt-pill late">' + atr + ' em atraso</span>' : '') : '<span class="nt-pill ok">Em dia</span>') + '</span></div>'
       + pushBox()
       + (L.length ? '<div class="nt-l">' + L.map(function (n) { return linha(n); }).join('') + '</div>'
-        : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova ou trabalho agendado, e antes de cada conferência de portal.</span></div>')
-      + '<div class="nt-f"><span>Entregas em até 2 dias · portais conforme a antecedência · somem ao resolver</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
+        : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova, agendamento e conferência de portal.</span></div>')
+      + '<div class="nt-f"><span>Tudo a partir de 2 dias antes · some ao resolver</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
   }
   function abrirPainel() {
     var p = $('notifPanel'), b = $('btnNotif');
@@ -267,7 +267,6 @@
     var L = itens(); contar(L);
     var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(L);
     // o alerta automático continua só para o que é urgente (até 2 dias ou atrasado)
-    L = L.filter(function (n) { return n.semProg || n.dias <= JANELA; });
     ultimaAssin = L.map(function (n) { return n.k + '@' + n.dias; }).join('|');
     if (!L.length) { fecharAlerta(false); return; }
     // reaparece em cada entrada no sistema, quando surge pendência nova ou a cada hora

@@ -150,7 +150,7 @@
       p.itens.forEach(function (x) { (g[x.d] = g[x.d] || []).push(x); });
       Object.keys(g).forEach(function (d) {
         var L = g[d], dias = L[0].dias;
-        if (dias > p.antec) return;
+        if (dias > (CA.JANELA_NOTIF || 2)) return; // mesma regra de toda a central: só a partir de 2 dias antes
         var conf = L.some(function (x) { return x.k === 'conf'; }), evs = L.filter(function (x) { return x.k !== 'conf'; });
         var titulo;
         if (conf) titulo = dias < 0 ? 'Conferência atrasada há ' + (-dias) + (dias === -1 ? ' dia' : ' dias') : dias === 0 ? 'Conferência programada para hoje' : 'Conferência do portal em ' + dbr(d);
@@ -200,7 +200,6 @@
       : '<div class="full pt-insts" id="pInsts"></div><datalist id="pIList">' + instOptions() + '</datalist>'
         + '<div class="full"><button type="button" class="btn sm" id="pAddInst">' + ic('plus') + 'Adicionar outra instituição</button><small class="pt-ih">Para aluno com mais de uma instituição: cada uma vira um portal separado, com o próprio link e as próprias conferências.</small></div>')
       + (p ? field('pS', 'Acompanhamento', '<select id="pS">' + opts([['Ativo', 'Ativo'], ['Suspenso', 'Suspenso'], ['Encerrado', 'Encerrado']], p.st) + '</select>', '')
-        + field('pA', 'Avisar com antecedência de', '<select id="pA">' + opts([[3, '3 dias'], [5, '5 dias'], [7, '7 dias'], [10, '10 dias'], [15, '15 dias']], p.antec) + '</select>', '')
         + '<div class="full" id="pReat" hidden>' + field('pR', 'Próxima conferência', inp('pR', 'date', p.prox && p.prox >= hoje() ? p.prox : hoje(), ' min="' + hoje() + '"'), '', 'Obrigatória para reativar o acompanhamento.') + '</div>'
         : field('pP', 'Primeira conferência', inp('pP', 'date', hoje(), ' min="' + hoje() + '"'), '', 'Hoje, se você vai conferir agora. O sistema avisa na data escolhida.'))
       + '</div>' + ERR;
@@ -261,7 +260,7 @@
             (p ? [inst] : novos.map(function (n) { return n.inst; })).forEach(function (nome) { if (temPortal(nome)) fail('Este aluno já tem um portal da ' + nome + ' em acompanhamento.'); });
             var ops = [];
             if (p) {
-              var st = val(m, 'pS'), antec = parseInt(val(m, 'pA'), 10) || ANTEC_PADRAO;
+              var st = val(m, 'pS'), antec = p.antec;
               Object.assign(rec, { 'Instituição': inst, Curso: val(m, 'pCu'), 'Matrícula': val(m, 'pM'), 'Endereço do portal': url, 'Status do acompanhamento': st, 'Antecedência do aviso': antec }, CA.editor(ts));
               if (st === 'Ativo' && (p.st !== 'Ativo' || !p.prox)) {
                 var pr = val(m, 'pR'); if (!sane(pr) || pr < hoje()) fail('Informe a próxima conferência (hoje ou depois).');
@@ -364,7 +363,6 @@
       + '<span class="pt-quick">' + [[7, '+7 dias'], [15, '+15'], [30, '+30']].map(function (q) { return '<button type="button" class="btn-ghost sm" data-q="' + q[0] + '">' + q[1] + '</button>'; }).join('') + '</span></div>'
       + '<p class="pt-sug" id="cSug"></p></section>'
       + '<details class="pt-more"><summary>Mais opções</summary><div class="form-grid" style="margin-top:10px">'
-      + field('cA', 'Avisar com antecedência de', '<select id="cA">' + opts([[3, '3 dias'], [5, '5 dias'], [7, '7 dias'], [10, '10 dias'], [15, '15 dias']], p.antec) + '</select>', '')
       + (ajuste ? '' : field('cE', 'Acompanhamento deste portal', '<select id="cE">' + opts([['Ativo', 'Continuar acompanhando'], ['Suspenso', 'Suspender'], ['Encerrado', 'Encerrar']], 'Ativo') + '</select>', '', 'Suspender ou encerrar dispensa a próxima conferência.'))
       + '</div></details>'
       + field('cO', 'Observações (opcional)', '<textarea id="cO" rows="2"></textarea>', 'full pt-o')
@@ -447,7 +445,7 @@
               n.criado = ts; n.atualizado = ts; base.push(n); byId[n.id] = n; novos.push(evNome(n) + (rn ? ' (' + rn.t.toLowerCase() + ' ' + dbr(rn.d) + ')' : ''));
             });
             var hd = ajuste ? h : dt.slice(0, 10);
-            var antecN = parseInt(val(m, 'cA'), 10) || ANTEC_PADRAO, prevProx = CA.normDate(rec['Próxima conferência'] || '');
+            var antecN = p.antec, prevProx = CA.normDate(rec['Próxima conferência'] || '');
             var resumo;
             Object.assign(rec, { Eventos: base, 'Antecedência do aviso': antecN }, CA.editor(ts));
             if (ajuste) {
@@ -578,7 +576,7 @@
       ['Mais adiante', 'in', function (p) { return p.diasConf > 7; }]
     ];
     var n = function (f) { return A.filter(f).length; };
-    var out = '<div class="page-head"><div><h1>Portais acadêmicos</h1><p>' + A.length + (A.length === 1 ? ' portal acompanhado' : ' portais acompanhados') + '. Confira só na data programada; o sistema avisa antes.</p></div><div class="page-actions">'
+    var out = '<div class="page-head"><div><h1>Portais acadêmicos</h1><p>' + A.length + (A.length === 1 ? ' portal acompanhado' : ' portais acompanhados') + '. Confira só na data programada; o sistema avisa na central 2 dias antes.</p></div><div class="page-actions">'
       + '<button type="button" class="btn primary" data-act="ptNew">' + ic('plus') + 'Adicionar portal</button></div></div>';
     out += '<div class="pt-kpis">'
       + kpi('Atrasadas', n(grupos[0][2]) + n(grupos[1][2]), 'out') + kpi('Hoje', n(grupos[2][2]), 'today') + kpi('Próximos 7 dias', n(grupos[3][2]), 'mid')
