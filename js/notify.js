@@ -1,5 +1,6 @@
 /* Central de notificações: avisa entregas, provas e trabalhos agendados
-   que vencem em até 2 dias (ou já venceram) enquanto não forem resolvidos. */
+   que vencem em até 2 dias (ou já venceram) enquanto não forem resolvidos.
+   O número vermelho do sino e o alerta automático contam só os atrasados. */
 'use strict';
 (function (CA) {
   var esc = CA.esc, $ = CA.$;
@@ -198,13 +199,18 @@
     return '<div class="np"><span class="np-st"><i></i>Avisos desativados neste ' + onde + '</span><div class="np-b"><button type="button" class="btn sm primary" data-np="on">Ativar</button></div></div>';
   }
 
-  /* Sino e central sempre a partir da MESMA lista: o número do sino é exatamente a quantidade de cartões da central */
+  /* O número vermelho do sino conta só o que já venceu sem resolver (atrasados).
+     O que ainda vai vencer aparece na central, em amarelo, mas não entra na contagem. */
+  function atrasados(L) { return L.filter(function (n) { return n.dias < 0; }); }
+  CA.notificacoesAtrasadas = function () { return atrasados(itens()); };
   function contar(L) {
     var b = $('btnNotif'), c = $('notifCount'); if (!b || !c) return;
-    c.textContent = L.length > 99 ? '99+' : L.length; c.hidden = !L.length;
-    b.classList.toggle('has', !!L.length);
-    b.title = L.length ? L.length + (L.length === 1 ? ' notificação' : ' notificações') : 'Nenhuma notificação';
-    document.title = (L.length ? '(' + L.length + ') ' : '') + document.title.replace(/^\(\d+\+?\)\s*/, '');
+    var n = atrasados(L).length, prox = L.length - n;
+    c.textContent = n > 99 ? '99+' : n; c.hidden = !n;
+    b.classList.toggle('has', !!n);
+    b.title = (n ? n + (n === 1 ? ' item em atraso' : ' itens em atraso') : 'Nada em atraso')
+      + (prox ? ' · ' + prox + (prox === 1 ? ' próximo do prazo' : ' próximos do prazo') : '');
+    document.title = (n ? '(' + n + ') ' : '') + document.title.replace(/^\(\d+\+?\)\s*/, '');
   }
   function sincronizar() {
     if (!CA.S || !CA.S.data) return;
@@ -229,12 +235,15 @@
 
   /* ---------- Sino no cabeçalho + painel ---------- */
   function painelHTML(L) {
-    var atr = L.filter(function (n) { return n.dias < 0; }).length;
-    return '<div class="nt-h"><b>Notificações</b><span class="nt-pills">' + (L.length ? '<span class="nt-pill">' + L.length + (L.length === 1 ? ' pendência' : ' pendências') + '</span>' + (atr ? '<span class="nt-pill late">' + atr + ' em atraso</span>' : '') : '<span class="nt-pill ok">Em dia</span>') + '</span></div>'
+    var A = atrasados(L), prox = L.filter(function (n) { return n.dias >= 0; });
+    var pills = (A.length ? '<span class="nt-pill late">' + A.length + ' em atraso</span>' : '<span class="nt-pill ok">Nada em atraso</span>')
+      + (prox.length ? '<span class="nt-pill">' + prox.length + ' a vencer' + '</span>' : '');
+    var sec = function (t, lista) { return lista.length ? '<div class="nt-sec">' + t + '</div>' + lista.map(function (n) { return linha(n); }).join('') : ''; };
+    return '<div class="nt-h"><b>Notificações</b><span class="nt-pills">' + pills + '</span></div>'
       + pushBox()
-      + (L.length ? '<div class="nt-l">' + L.map(function (n) { return linha(n); }).join('') + '</div>'
+      + (L.length ? '<div class="nt-l">' + (A.length && prox.length ? sec('Em atraso', A) + sec('Próximos prazos', prox) : L.map(function (n) { return linha(n); }).join('')) + '</div>'
         : '<div class="nt-e"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><b>Nenhuma notificação no momento</b><span>Você será avisado 2 dias antes de cada entrega, prova, agendamento e conferência de portal.</span></div>')
-      + '<div class="nt-f"><span>Tudo a partir de 2 dias antes · some ao resolver</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
+      + '<div class="nt-f"><span>O sino conta só os atrasados · prazos aparecem 2 dias antes</span><a href="#/agenda/prazos" data-nclose>Ver agenda <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>';
   }
   function abrirPainel() {
     var p = $('notifPanel'), b = $('btnNotif');
@@ -250,10 +259,11 @@
     var a = $('notifAlert'); if (!a || a.hidden) return;
     a.hidden = true; if (lembrar) { fechadoAssin = ultimaAssin; fechadoEm = Date.now(); }
   }
+  /* Recebe só os itens em atraso: o alerta automático não dispara para o que ainda vai vencer */
   function mostrarAlerta(L) {
-    var a = $('notifAlert'), atr = L.filter(function (n) { return n.dias < 0; }).length, hoje = L.filter(function (n) { return n.dias === 0; }).length;
-    var tit = atr ? (atr === 1 ? '1 pendência em atraso' : atr + ' pendências em atraso') : hoje ? (hoje === 1 ? '1 pendência vence hoje' : hoje + ' pendências vencem hoje') : (L.length === 1 ? '1 prazo vence nos próximos 2 dias' : L.length + ' prazos vencem nos próximos 2 dias');
-    a.className = 'nt-alert ' + (L.some(function (n) { var c = sev(n); return c === 'late' || c === 'today'; }) ? 'late' : 'soon');
+    var a = $('notifAlert'), atr = L.length;
+    var tit = atr === 1 ? '1 item em atraso' : atr + ' itens em atraso';
+    a.className = 'nt-alert late';
     a.innerHTML = '<div class="na-h"><span class="na-ic"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><div><b>Atenção: ' + tit + '</b><span>Confira e não deixe passar. O aviso continua até ser marcado como resolvido.</span></div>'
       + '<button type="button" class="na-x" data-nx aria-label="Fechar aviso"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>'
       + '<div class="na-l">' + L.slice(0, 4).map(function (n) { return linha(n, true); }).join('') + '</div>'
@@ -264,9 +274,10 @@
   CA.atualizarNotificacoes = function () {
     var b = $('btnNotif'); if (!b || !CA.S.data) return;
     if (CA.push && !CA.push.synced) CA.push.sync();
-    var L = itens(); contar(L);
-    var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(L);
-    // o alerta automático continua só para o que é urgente (até 2 dias ou atrasado)
+    var T = itens(); contar(T);
+    var p = $('notifPanel'); if (p && !p.hidden) p.innerHTML = painelHTML(T);
+    // o alerta automático só aparece para o que já venceu; prazos a vencer ficam apenas na central
+    var L = atrasados(T);
     ultimaAssin = L.map(function (n) { return n.k + '@' + n.dias; }).join('|');
     if (!L.length) { fecharAlerta(false); return; }
     // reaparece em cada entrada no sistema, quando surge pendência nova ou a cada hora
